@@ -5,6 +5,7 @@ use crate::lexer::token::Token;
 use std::rc::Rc;
 
 /// Set of statements
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Program<'a> {
     body: Vec<Statement<'a>>,
 }
@@ -18,18 +19,20 @@ impl<'a> Program<'a> {
 /// I immetate the inheritance of OOP by wrapping structs.
 /// Using this method, I can downcast Statement into these structs
 /// by using match (It is easier than the downcast of trait).
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Statement<'a> {
     Assign(Assign<'a>),
 }
 
 /// e.g. "label:" or "label = 10"
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Assign<'a> {
-    ident: Identifier,
+    ident: Identifier<'a>,
     expr:  Expression<'a>,
 }
 
 impl<'a> Assign<'a> {
-    pub fn new(ident: Identifier, expr: Expression) -> Assign {
+    pub fn new(ident: Identifier<'a>, expr: Expression<'a>) -> Assign<'a> {
         Assign { ident, expr }
     }
 
@@ -39,9 +42,10 @@ impl<'a> Assign<'a> {
 }
 
 /// I use same method to represent Expression and whose children
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Expression<'a> {
     /// Literals
-    Identifier(Identifier),
+    Identifier(Identifier<'a>),
     Integer(Integer),
     CurrAddr(CurrAddr),
 
@@ -51,12 +55,13 @@ pub enum Expression<'a> {
 }
 
 /// e.g. "label_with_underline", "camelCaseLabel"
-pub struct Identifier {
-    name: String,
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct Identifier<'a> {
+    name: &'a str,
 }
 
-impl<'a> Identifier {
-    pub fn new(name: String) -> Identifier {
+impl<'a> Identifier<'a> {
+    pub fn new(name: &'a str) -> Identifier<'a> {
         Identifier { name }
     }
 
@@ -66,6 +71,7 @@ impl<'a> Identifier {
 }
 
 // Kind of integer (Operand of 6502 is either 8-bit, 16-bit or none)
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum IntegerKind {
     /// 8-bit integer
     Byte,
@@ -74,6 +80,7 @@ pub enum IntegerKind {
 }
 
 /// Integer literal
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Integer {
     value: u16,
     kind:  IntegerKind
@@ -93,6 +100,7 @@ impl<'a> Integer {
 /// to the identifier. But While constructiong ast, the parser can't
 /// get the address, so there is no field.
 /// (Get the address in next process: assemble)
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct CurrAddr;
 
 impl<'a> CurrAddr {
@@ -106,6 +114,7 @@ impl<'a> CurrAddr {
 }
 
 /// e.g. "#$00", "@(labe + 3)"
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Prefix<'a> {
     op: Token<'a>,
     expr: Rc<Expression<'a>>,
@@ -122,6 +131,7 @@ impl<'a> Prefix<'a> {
 }
 
 /// e.g. "1 + 2", "1 / (2 + 3)" ..
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Infix<'a> {
     op: Token<'a>,
     lhs_expr: Rc<Expression<'a>>,
