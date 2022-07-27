@@ -1,5 +1,5 @@
-mod token;
 mod lexer;
+mod parser;
 
 use std::io::stdin;
 

@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Token<'a> {
     // Special tokne
@@ -19,6 +17,8 @@ pub enum Token<'a> {
     Int{ literal: &'a str, base: IntBase },
 
     // One-character token
+    /// '='
+    Assign,
     /// '+'
     Plus,
     /// '-'
@@ -33,6 +33,8 @@ pub enum Token<'a> {
     Dollar,
     /// '%'
     Percent,
+    /// '@'
+    AtSign,
     /// ','
     Comma,
     /// ':'
