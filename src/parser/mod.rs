@@ -1,31 +1,20 @@
 #![allow(dead_code)]
 
+use std::cell::Cell;
+use crate::lexer::token::{Token, Mnemonic, IntBase};
+use self::ast::{
+    Statement, Expression, Assign, Identifier, Instruction, AddrMode, Integer, IntegerKind, CurrAddr, EmptyExpr
+};
+use anyhow::{Result, anyhow};
+
 pub mod ast;
 
-use crate::{lexer::token::Token, parser::ast::{Assign, CurrAddr}};
-use self::ast::{Program, Statement, Identifier, Expression, Infix, Prefix};
-use std::{error::Error, cell::Cell, rc::Rc};
-use thiserror::Error;
-
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
-enum OperatorOrder {
-    Lowest,
-    Sum,
-    Product,
-    Prefix, // '#', '@'
-}
-
-#[derive(Debug, Error)]
-pub enum ParseError {
-    #[error("Failed to get current tokne: {msg}")]
-    FailedToGetCurrToken{ msg: String },
-    #[error("Unexpected token found: {msg}")]
-    UnexpectedTokenFound{ msg: String },
-}
-
 pub struct Parser<'a> {
+    /// List of Token that parser use.
     token: Vec<Token<'a>>,
-    curr:  Cell<usize>,
+
+    /// Position of token that is currently used by parser.
+    curr: Cell<usize>,
 }
 
 impl<'a> Parser<'a> {
@@ -33,142 +22,213 @@ impl<'a> Parser<'a> {
         Parser { token, curr: Cell::new(0) }
     }
 
-    /// Construct program from Vec<Token>
-    pub fn parse(&self) -> Result<Program, Box<dyn Error>> {
-        let mut body = Vec::new();
-        while !self.curr_token_is(Token::Eof) {
-            body.push(self.statement()?);
+    pub fn parse(&self) -> Result<Vec<Statement>> {
+        let mut ret = Vec::new();
+        while !self.curr_token_is(&Token::Eof) {
+            ret.push(self.statement()?);
             self.next_token();
         }
-        Ok(Program::new(body))
+        Ok(ret)
     }
 }
 
 impl<'a> Parser<'a> {
-    fn statement(&self) -> Result<Statement, Box<dyn Error>> {
-        match self.curr_token().expect("err: stmt") {
-            // Assing
-            Token::Ident { .. } => {
-                let ident = self.identifier();
-                if self.peek_token_is(Token::Colon) {
-                    self.next_token();
-                    return Ok(Assign::new(ident?, CurrAddr::new().wrapping()).wrapping());
+    /// In the end of this function, the next token must be unused.
+    fn statement(&self) -> Result<Statement> {
+        match self.curr_token()? {
+            Token::Ident { literal } => {
+                self.next_token();
+                self.assign(literal.to_string())
+            }
+            Token::Mnemonic { kind } => {
+                self.next_token();
+                self.instruction(kind)
+            }
+            token => Err(anyhow!("There is no statement that start with {:?}", token)),
+        }
+    }
+}
+
+impl<'a> Parser<'a> {
+    fn assign(&self, name: String) -> Result<Statement> {
+        let expr = match self.curr_token()? {
+            Token::Assign => {
+                self.next_token();
+                self.expression()?
+            }
+            token => {
+                if token != Token::Colon {
+                    self.back_token();
                 }
-                if self.peek_token_is(Token::Assign) {
-                    self.next_token();
-                    return Ok(Assign::new(ident?, self.expression(OperatorOrder::Lowest)?).wrapping());
-                }
-                Err(ParseError::UnexpectedTokenFound { msg: "".to_string() })? }
-            _ => todo!()
+                CurrAddr::new().wrapping()
+            }
+        };
+        Ok(Assign::new(Identifier::new(name), expr).wrapping())
+    }
+}
+
+impl<'a> Parser<'a> {
+    fn instruction(&self, kind: Mnemonic) -> Result<Statement> {
+        match self.curr_token()? {
+            Token::RegisterA => {
+                let expr = EmptyExpr::new().wrapping();
+                Ok(Instruction::new(kind, AddrMode::Accumulator, expr).wrapping())
+            }
+            Token::Sharp => {
+                self.next_token();
+                let expr = self.expression()?;
+                Ok(Instruction::new(kind, AddrMode::Immediate, expr).wrapping())
+            }
+            Token::AtSign => {
+                self.next_token();
+                let expr = self.expression()?;
+                Ok(Instruction::new(kind, AddrMode::Relative, expr).wrapping())
+            }
+            Token::LSquare => self.indirect(kind),
+            _ => self.absolute_or_zeropage(kind),
         }
     }
 
-    /// Assume that current token is Token::Ident and return Identifier
-    /// If current token is empty or not Token::Ident, return Error
-    fn identifier(&self) -> Result<Identifier, Box<dyn Error>> {
-        let name = match self.curr_token().ok_or(ParseError::FailedToGetCurrToken { msg: "".to_string() })? {
-            Token::Ident { literal } => literal,
-            _ => Err(ParseError::UnexpectedTokenFound { msg: "".to_string() })?,
-        };
-        Ok(Identifier::new(name))
-    }
+    fn indirect(&self, kind: Mnemonic) -> Result<Statement> {
+        self.next_token();
+        let expr = self.expression()?;
 
-    fn expression(&self, order: OperatorOrder) -> Result<Expression, Box<dyn Error>> {
-        let mut left = match self.peek_token().unwrap() {
-            // Prefix
-            Token::Sharp | Token::AtSign => self.prefix()?.wrapping(),
-            Token::Ident { .. }          => self.identifier()?.wrapping(),
-            _ => todo!(),
-        };
+        // Eiter indirect or indirect-y
+        if self.expect_peek(&Token::RSquare) {
+            if !self.expect_peek(&Token::Comma) {
+                return Ok(Instruction::new(kind, AddrMode::Indirect,  expr).wrapping());
+            }
 
-        while !self.peek_token_is(Token::Eof) && order < self.peek_order() {
-            match self.peek_token().unwrap() {
-                Token::Plus
-                | Token::Minus
-                | Token::Star
-                | Token::Slash => {
-                    self.next_token();
-                    left = self.infix(left)?.wrapping();
-                }
-                _ => return Ok(left),
+            if self.curr_token_is(&Token::Comma) && self.peek_token_is(&Token::RegisterY) {
+                self.next_token();
+                return Ok(Instruction::new(kind, AddrMode::IndirectY, expr).wrapping());
+            } else {
+                return Err(anyhow!("Invalid operand that start with '['"));
             }
         }
 
-        Ok(left)
+        // Or, indirect-x
+        if !self.expect_peek(&Token::Comma) {
+            Err(anyhow!("Invalid operand that start with '['"))?
+        }
+        if !self.expect_peek(&Token::RegisterX) {
+            Err(anyhow!("Invalid operand that start with '['"))?
+        }
+        if !self.expect_peek(&Token::RSquare) {
+            Err(anyhow!("Invalid operand that start with '['"))?
+        }
+        Ok(Instruction::new(kind, AddrMode::IndirectX, expr).wrapping())
     }
 
-    fn prefix(&self) -> Result<Prefix, Box<dyn Error>> {
-        let op   = self.peek_token().unwrap();
-        self.next_token();
-        let expr = self.expression(OperatorOrder::Prefix)?; 
-        Ok(Prefix::new(op, Rc::new(expr)))
-    }
+    fn absolute_or_zeropage(&self, kind: Mnemonic) -> Result<Statement> {
+        let expr = self.expression()?;
 
-    fn infix(&'a self, left: Expression<'a>) -> Result<Infix<'a>, Box<dyn Error>> {
-        let op = self.curr_token().unwrap();
-        let order = self.curr_order();
-        self.next_token();
-        let right = self.expression(order)?;
-        Ok(Infix::new(op, Rc::new(left), Rc::new(right)))
+        // If there is no expression in operand, this addressing mod is implied
+        // and return early.
+        match expr {
+            Expression::EmptyExpr(_) => {
+                let ret = Ok(Instruction::new(kind, AddrMode::Implied, expr).wrapping());
+                return ret;
+            }
+            _ => (),
+        }
+
+        if !self.expect_peek(&Token::Comma) {
+            return Ok(Instruction::new(kind, AddrMode::AbsoluteOrZeropage, expr).wrapping());
+        }
+
+        if self.expect_peek(&Token::RegisterX) {
+            return Ok(Instruction::new(kind, AddrMode::AbsoluteOrZeropageX, expr).wrapping());
+        }
+        if self.expect_peek(&Token::RegisterY) {
+            return Ok(Instruction::new(kind, AddrMode::AbsoluteOrZeropageY, expr).wrapping());
+        }
+        Err(anyhow!("Missing register x or y"))
     }
 }
 
-/// Helper functions
 impl<'a> Parser<'a> {
-    fn curr_token(&self) -> Option<Token> {
+    /// In the end of this function, the next token must be unused.
+    fn expression(&self) -> Result<Expression> {
+        match self.curr_token()? {
+            Token::Ident { literal }     => Ok(self.identifier(literal)?.wrapping()),
+            Token::Int { literal, base } => Ok(self.integer(literal, base)?.wrapping()),
+            token => Err(anyhow!("There is no expression that start with {:?}", token)),
+        }
+    }
+
+    fn identifier(&self, name: &str) -> Result<Identifier> {
+        Ok(Identifier::new(name.to_string()))
+    }
+
+    fn integer(&self, value: &str, base: IntBase) -> Result<Integer> {
+        let value = value.chars().filter(|c| *c != '_').collect::<String>();
+        let base  = match base {
+            IntBase::Binary      => 2,
+            IntBase::Octal       => 8,
+            IntBase::Decimal     => 10,
+            IntBase::Hexadecimal => 16,
+        };
+
+        match u8::from_str_radix(value.as_str(), base) {
+            Ok(value) => return Ok(Integer::new(value as u16, IntegerKind::Byte)),
+            Err(_) => (),
+        }
+        match u16::from_str_radix(value.as_str(), base) {
+            Ok(value) => Ok(Integer::new(value, IntegerKind::Word)),
+            Err(err)  => Err(err)?,
+        }
+    }
+}
+
+impl<'a> Parser<'a> {
+    fn curr_token(&self) -> Result<Token> {
         match self.token.get(self.curr.get() + 0) {
-            Some(token) => Some(*token),
-            None => None,
+            Some(token) => Ok(*token),
+            None => Err(anyhow!("Failed to read curr token: pos {}", self.curr.get())),
         }
     }
 
-    fn peek_token(&self) -> Option<Token> {
+    fn peek_token(&self) -> Result<Token> {
         match self.token.get(self.curr.get() + 1) {
-            Some(token) => Some(*token),
-            None => None,
+            Some(token) => Ok(*token),
+            None => Err(anyhow!("Failed to read next token: pos {}", self.curr.get())),
         }
     }
 
-    fn curr_token_is(&self, token: Token) -> bool {
+    fn curr_token_is(&self, token: &Token) -> bool {
+        use std::mem;
         match self.curr_token() {
-            Some(target) => target == token,
-            None => false
+            Ok(val) => mem::discriminant(&val) == mem::discriminant(token),
+            Err(_)  => false,
         }
     }
 
-    fn peek_token_is(&self, token: Token) -> bool {
+    fn peek_token_is(&self, token: &Token) -> bool {
+        use std::mem;
         match self.peek_token() {
-            Some(target) => target == token,
-            None => false
+            Ok(val) => mem::discriminant(&val) == mem::discriminant(token),
+            Err(_)  => false,
         }
     }
 
-    fn token_to_order(token: Token) -> OperatorOrder {
-        match token {
-            Token::Plus | Token::Minus => OperatorOrder::Sum,
-            Token::Star | Token::Slash => OperatorOrder::Product,
-            _ => OperatorOrder::Lowest,
+    fn expect_peek(&self, token: &Token) -> bool {
+        if self.peek_token_is(token) {
+            self.next_token();
+            true
+        } else {
+            false
         }
     }
 
-    fn curr_order(&self) -> OperatorOrder {
-        let token = match self.curr_token() {
-            Some(token) => token,
-            None => return OperatorOrder::Lowest,
-        };
-        Self::token_to_order(token)
-    }
-
-    fn peek_order(&self) -> OperatorOrder {
-        let token = match self.peek_token() {
-            Some(token) => token,
-            None => return OperatorOrder::Lowest,
-        };
-        Self::token_to_order(token)
+    fn back_token(&self) {
+        if self.curr.get() > 0 {
+            self.curr.set(self.curr.get() - 1);
+        }
     }
 
     fn next_token(&self) {
-        if self.token.len() > self.curr.get() {
+        if self.token.len() - 1 > self.curr.get() {
             self.curr.set(self.curr.get() + 1);
         }
     }

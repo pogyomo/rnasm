@@ -1,71 +1,91 @@
 #![allow(dead_code)]
 
-use crate::lexer::token::Token;
-
 use std::rc::Rc;
 
-/// Set of statements
+use crate::lexer::token::Mnemonic;
+
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct Program<'a> {
-    body: Vec<Statement<'a>>,
+pub enum Statement {
+    Assign(Assign),
+    Instruction(Instruction),
 }
 
-impl<'a> Program<'a> {
-    pub fn new(body: Vec<Statement>) -> Program {
-        Program { body }
-    }
-}
-
-/// I immetate the inheritance of OOP by wrapping structs.
-/// Using this method, I can downcast Statement into these structs
-/// by using match (It is easier than the downcast of trait).
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub enum Statement<'a> {
-    Assign(Assign<'a>),
+pub struct Assign {
+    ident: Identifier,
+    expr:  Expression,
 }
 
-/// e.g. "label:" or "label = 10"
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub struct Assign<'a> {
-    ident: Identifier<'a>,
-    expr:  Expression<'a>,
-}
-
-impl<'a> Assign<'a> {
-    pub fn new(ident: Identifier<'a>, expr: Expression<'a>) -> Assign<'a> {
+impl Assign {
+    pub fn new(ident: Identifier, expr: Expression) -> Assign {
         Assign { ident, expr }
     }
 
-    pub fn wrapping(self) -> Statement<'a> {
+    pub fn wrapping(self) -> Statement {
         Statement::Assign(self)
     }
 }
 
-/// I use same method to represent Expression and whose children
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub enum Expression<'a> {
-    /// Literals
-    Identifier(Identifier<'a>),
+pub enum AddrMode {
+    Accumulator,
+
+    /// While parsing, parser can't detect that operand is either 8bit or 16bit.
+    AbsoluteOrZeropage,
+    AbsoluteOrZeropageX,
+    AbsoluteOrZeropageY,
+
+    Immediate,
+    Implied,
+    Indirect,
+    IndirectX,
+    IndirectY,
+    Relative,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct Instruction {
+    kind: Mnemonic,
+    mode: AddrMode,
+    expr: Expression,
+}
+
+impl Instruction {
+    pub fn new(kind: Mnemonic, mode: AddrMode, expr: Expression) -> Instruction {
+        Instruction { kind, mode, expr }
+    }
+
+    pub fn wrapping(self) -> Statement {
+        Statement::Instruction(self)
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum Expression {
+    // Literal
+    Identifier(Identifier),
     Integer(Integer),
-    CurrAddr(CurrAddr),
 
     /// Operators
-    Prefix(Prefix<'a>),
-    Infix(Infix<'a>),
+    Prefix(Prefix),
+    Infix(Infix),
+
+    // Special expression
+    CurrAddr(CurrAddr),
+    EmptyExpr(EmptyExpr),
 }
 
-/// e.g. "label_with_underline", "camelCaseLabel"
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct Identifier<'a> {
-    name: &'a str,
+pub struct Identifier {
+    name: String,
 }
 
-impl<'a> Identifier<'a> {
-    pub fn new(name: &'a str) -> Identifier<'a> {
+impl Identifier {
+    pub fn new(name: String) -> Identifier {
         Identifier { name }
     }
 
-    pub fn wrapping(self) -> Expression<'a> {
+    pub fn wrapping(self) -> Expression {
         Expression::Identifier(self)
     }
 }
@@ -79,75 +99,83 @@ pub enum IntegerKind {
     Word
 }
 
-/// Integer literal
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Integer {
     value: u16,
-    kind:  IntegerKind
+    kind:  IntegerKind,
 }
 
-impl<'a> Integer {
+impl Integer {
     pub fn new(value: u16, kind: IntegerKind) -> Integer {
         Integer { value, kind }
     }
 
-    pub fn wrapping(self) -> Expression<'a> {
+    pub fn wrapping(self) -> Expression {
         Expression::Integer(self)
     }
 }
 
-/// When I process "label:", I need to store the current address
-/// to the identifier. But While constructiong ast, the parser can't
-/// get the address, so there is no field.
-/// (Get the address in next process: assemble)
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct CurrAddr;
+pub enum PrefixOp {}
 
-impl<'a> CurrAddr {
-    pub fn new() -> CurrAddr {
-        CurrAddr {}
-    }
-
-    pub fn wrapping(self) -> Expression<'a> {
-        Expression::CurrAddr(self)
-    }
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct Prefix {
+    op: PrefixOp,
+    rhs_expr: Rc<Expression>,
 }
 
-/// e.g. "#$00", "@(labe + 3)"
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub struct Prefix<'a> {
-    op: Token<'a>,
-    expr: Rc<Expression<'a>>,
-}
-
-impl<'a> Prefix<'a> {
-    pub fn new(op: Token<'a>, expr: Rc<Expression<'a>>) -> Prefix<'a> {
-        Prefix { op, expr }
+impl Prefix {
+    pub fn new(op: PrefixOp, rhs_expr: Rc<Expression>) -> Prefix {
+        Prefix { op, rhs_expr }
     }
 
-    pub fn wrapping(self) -> Expression<'a> {
+    pub fn wrapping(self) -> Expression {
         Expression::Prefix(self)
     }
 }
 
-/// e.g. "1 + 2", "1 / (2 + 3)" ..
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct Infix<'a> {
-    op: Token<'a>,
-    lhs_expr: Rc<Expression<'a>>,
-    rhs_expr: Rc<Expression<'a>>,
+pub enum InfixOp {}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct Infix {
+    op: InfixOp,
+    lhs_expr: Rc<Expression>,
+    rhs_expr: Rc<Expression>,
 }
 
-impl<'a> Infix<'a> {
-    pub fn new(
-        op: Token<'a>,
-        lhs_expr: Rc<Expression<'a>>,
-        rhs_expr: Rc<Expression<'a>>
-    ) -> Infix<'a> {
+impl Infix {
+    pub fn new(op: InfixOp, lhs_expr: Rc<Expression>, rhs_expr: Rc<Expression>) -> Infix {
         Infix { op, lhs_expr, rhs_expr }
     }
 
-    pub fn wrapping(self) -> Expression<'a> {
+    pub fn wrapping(self) -> Expression {
         Expression::Infix(self)
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct CurrAddr;
+
+impl CurrAddr {
+    pub fn new() -> CurrAddr {
+        CurrAddr {}
+    }
+
+    pub fn wrapping(self) -> Expression {
+        Expression::CurrAddr(self)
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct EmptyExpr;
+
+impl EmptyExpr {
+    pub fn new() -> EmptyExpr {
+        EmptyExpr {}
+    }
+
+    pub fn wrapping(self) -> Expression {
+        Expression::EmptyExpr(self)
     }
 }

@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Token<'a> {
     // Special tokne
@@ -58,7 +60,9 @@ pub enum Token<'a> {
     /// All valid mnemonic
     Mnemonic{ kind: Mnemonic },
     /// Registers
-    Register{ kind: RegKind },
+    RegisterA,
+    RegisterX,
+    RegisterY,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -79,14 +83,4 @@ pub enum IntBase {
     Decimal,
     /// Integer start with '0x' or '$'
     Hexadecimal
-}
-
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum RegKind {
-    /// A register
-    A,
-    /// X register
-    X,
-    /// Y register
-    Y
 }

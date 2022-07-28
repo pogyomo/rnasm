@@ -1,19 +1,19 @@
 mod lexer;
 mod parser;
 
-use std::io::stdin;
-
-use crate::{lexer::Lexer, parser::Parser};
+use std::io::{stdin, stdout, Write};
+use lexer::Lexer;
+use parser::Parser;
 
 fn main() {
-    let cin = stdin();
     loop {
+        print!(">> ");
+        stdout().flush().unwrap();
         let mut buf = String::new();
-        cin.read_line(&mut buf).unwrap();
+        stdin().read_line(&mut buf).unwrap();
         let lexer = Lexer::new(buf.as_str());
         let token = lexer.tokenize();
-        let parser = Parser::new(token.clone());
-        println!("{:#?}", token);
-        println!("{:#?}", parser.parse());
+        println!("{:#?}", &token);
+        println!("{:#?}", Parser::new(token).parse());
     }
 }

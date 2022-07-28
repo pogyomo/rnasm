@@ -3,7 +3,7 @@ pub mod token;
 use std::cell::Cell;
 use std::collections::HashMap;
 
-use self::token::{Token, IntBase, Mnemonic, RegKind};
+use self::token::{Token, IntBase, Mnemonic};
 
 use once_cell::sync::Lazy;
 
@@ -151,9 +151,9 @@ impl<'a> Lexer<'a> {
         static KEYWORD: Lazy<HashMap<&str, Token>> = Lazy::new(|| {
             let mut ret = HashMap::new();
             // Registers
-            ret.insert("a",   Token::Register { kind: RegKind::A    } );
-            ret.insert("x",   Token::Register { kind: RegKind::X    } );
-            ret.insert("y",   Token::Register { kind: RegKind::Y    } );
+            ret.insert("a",   Token::RegisterA);
+            ret.insert("x",   Token::RegisterX);
+            ret.insert("y",   Token::RegisterY);
 
             // Mnemonic
             ret.insert("adc", Token::Mnemonic { kind: Mnemonic::Adc } );
