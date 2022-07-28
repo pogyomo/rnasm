@@ -2,6 +2,8 @@
 
 // Memo: At the begin of all function, current token must be unused token, and previous token must be
 // used token.
+// 
+// Memo: Is there any way to remove (stop to use) self.back_token?
 
 use std::cell::Cell;
 use crate::lexer::token::{Token, Mnemonic, IntBase};
@@ -131,8 +133,8 @@ impl<'a> Parser<'a> {
         // and return early.
         match expr {
             Expression::EmptyExpr(_) => {
-                let ret = Ok(Instruction::new(kind, AddrMode::Implied, expr).wrapping());
-                return ret;
+                self.back_token();
+                return Ok(Instruction::new(kind, AddrMode::Implied, expr).wrapping());
             }
             _ => (),
         }
@@ -157,7 +159,7 @@ impl<'a> Parser<'a> {
         match self.curr_token()? {
             Token::Ident { literal }     => Ok(self.identifier(literal)?.wrapping()),
             Token::Int { literal, base } => Ok(self.integer(literal, base)?.wrapping()),
-            token => Err(anyhow!("There is no expression that start with {:?}", token)),
+            _ => Ok(EmptyExpr::new().wrapping())
         }
     }
 
