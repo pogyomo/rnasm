@@ -1,9 +1,13 @@
 #![allow(dead_code)]
 
+// Memo: At the begin of all function, current token must be unused token, and previous token must be
+// used token.
+
 use std::cell::Cell;
 use crate::lexer::token::{Token, Mnemonic, IntBase};
 use self::ast::{
-    Statement, Expression, Assign, Identifier, Instruction, AddrMode, Integer, IntegerKind, CurrAddr, EmptyExpr
+    Statement, Expression, Assign, Identifier, Instruction,
+    AddrMode, Integer, IntegerKind, CurrAddr, EmptyExpr
 };
 use anyhow::{Result, anyhow};
 
@@ -58,7 +62,7 @@ impl<'a> Parser<'a> {
             }
             token => {
                 if token != Token::Colon {
-                    self.back_token();
+                    self.back_token(); // TODO: This operation may be removable
                 }
                 CurrAddr::new().wrapping()
             }
@@ -182,6 +186,7 @@ impl<'a> Parser<'a> {
 }
 
 impl<'a> Parser<'a> {
+    /// Get current token. If it failed, return error
     fn curr_token(&self) -> Result<Token> {
         match self.token.get(self.curr.get() + 0) {
             Some(token) => Ok(*token),
@@ -189,6 +194,7 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Get next token. If it failed, return error
     fn peek_token(&self) -> Result<Token> {
         match self.token.get(self.curr.get() + 1) {
             Some(token) => Ok(*token),
@@ -212,6 +218,8 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// If next token is expected token, return true and move the token potition +1
+    /// Else, only return false
     fn expect_peek(&self, token: &Token) -> bool {
         if self.peek_token_is(token) {
             self.next_token();

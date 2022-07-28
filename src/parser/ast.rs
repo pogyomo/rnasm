@@ -63,15 +63,23 @@ impl Instruction {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Expression {
     // Literal
+    /// e.g. 'Label_with_underline'
     Identifier(Identifier),
+    /// e.g. '10', '312'
     Integer(Integer),
 
-    /// Operators
+    // Operators
+    /// TODO: I might not implement prefix operator
     Prefix(Prefix),
+    /// e.g. '5 + label', '10 / label'
     Infix(Infix),
 
     // Special expression
+    /// Current address. This will be used at assemble part.
     CurrAddr(CurrAddr),
+    /// If parser can't get expression, this will be returned.
+    /// There is instructions that don't have operand, so this expression
+    /// will be used to parse these instruction.
     EmptyExpr(EmptyExpr),
 }
 
