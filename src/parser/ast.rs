@@ -63,9 +63,9 @@ impl Assign {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Instruction {
-    kind: Mnemonic,
-    mode: AddrMode,
-    expr: Expression,
+    pub kind: Mnemonic,
+    pub mode: AddrMode,
+    pub expr: Expression,
 }
 
 impl Instruction {
@@ -127,7 +127,7 @@ impl Debug for Expression {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Identifier {
-    name: String,
+    pub name: String,
 }
 
 impl Identifier {
@@ -142,7 +142,7 @@ impl Identifier {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Integer {
-    value: u16,
+    pub value: u16,
 }
 
 impl Integer {
@@ -160,8 +160,8 @@ pub enum PrefixOp {}
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Prefix {
-    op: PrefixOp,
-    rhs_expr: Rc<Expression>,
+    pub op: PrefixOp,
+    pub rhs_expr: Rc<Expression>,
 }
 
 impl Prefix {
@@ -188,9 +188,9 @@ pub enum InfixOp {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Infix {
-    op: InfixOp,
-    lhs_expr: Rc<Expression>,
-    rhs_expr: Rc<Expression>,
+    pub op: InfixOp,
+    pub lhs_expr: Rc<Expression>,
+    pub rhs_expr: Rc<Expression>,
 }
 
 impl Infix {
