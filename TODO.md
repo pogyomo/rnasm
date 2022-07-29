@@ -3,4 +3,5 @@
 - [ ] Add beautiful error message (if possible)
 
 ## Parser
-- [ ] Implement infix operator
+- [x] Implement infix operator
+- [ ] Consider to implement more infix operator (e.g. '<<', '>>', etc.)
