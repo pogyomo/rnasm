@@ -1,6 +1,6 @@
 use std::rc::Rc;
 use std::fmt::Debug;
-use crate::inst::{Mnemonic, UncertainAddrMode};
+use crate::inst::{Mnemonic, AddrMode};
 
 #[derive(PartialEq, Eq, Clone)]
 pub struct Program {
@@ -64,12 +64,12 @@ impl Assign {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Instruction {
     kind: Mnemonic,
-    mode: UncertainAddrMode,
+    mode: AddrMode,
     expr: Expression,
 }
 
 impl Instruction {
-    pub fn new(kind: Mnemonic, mode: UncertainAddrMode, expr: Expression) -> Instruction {
+    pub fn new(kind: Mnemonic, mode: AddrMode, expr: Expression) -> Instruction {
         Instruction { kind, mode, expr }
     }
 

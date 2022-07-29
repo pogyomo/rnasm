@@ -10,11 +10,11 @@
 use std::cell::Cell;
 use std::rc::Rc;
 use crate::lexer::token::{TokenList, Token, IntBase};
-use crate::inst::{Mnemonic, UncertainAddrMode};
+use crate::inst::{Mnemonic, AddrMode, ZPKind};
 use self::ast::{Program, Statement, Expression, Assign, Identifier, Instruction};
 use self::ast::{Integer, CurrAddr, EmptyExpr, InfixOp, Infix};
 use self::order::Order;
-use anyhow::{Result, anyhow, Context};
+use anyhow::{Result, anyhow, Context, bail};
 
 pub mod ast;
 mod order;
@@ -83,24 +83,32 @@ impl<'a> Parser<'a> {
         match self.curr_token()? {
             Token::RegisterA => {
                 let expr = EmptyExpr::new().wrapping();
-                Ok(Instruction::new(kind, UncertainAddrMode::Accumulator, expr).wrapping())
+                Ok(Instruction::new(kind, AddrMode::Accumulator, expr).wrapping())
             }
             Token::Sharp => {
                 self.next_token();
                 let expr = self.expression(Order::Lowest)?;
-                Ok(Instruction::new(kind, UncertainAddrMode::Immediate, expr).wrapping())
+                Ok(Instruction::new(kind, AddrMode::Immediate, expr).wrapping())
             }
             Token::AtSign => {
                 self.next_token();
                 let expr = self.expression(Order::Lowest)?;
-                Ok(Instruction::new(kind, UncertainAddrMode::Relative, expr).wrapping())
+                Ok(Instruction::new(kind, AddrMode::Relative, expr).wrapping())
             }
             Token::LSquare => {
                 self.next_token();
                 self.indirect(kind)
             }
+            Token::LTSign => {
+                self.next_token();
+                self.zeropage(kind, true)
+            }
+            Token::GTSign => {
+                self.next_token();
+                self.zeropage(kind, false)
+            }
             _ => {
-                self.absolute_or_zeropage(kind)
+                self.absolute_or_implied(kind)
             }
         }
     }
@@ -111,12 +119,12 @@ impl<'a> Parser<'a> {
         // Eiter indirect or indirect-y
         if self.expect_peek(&Token::RSquare) {
             if !self.expect_peek(&Token::Comma) {
-                return Ok(Instruction::new(kind, UncertainAddrMode::Indirect,  expr).wrapping());
+                return Ok(Instruction::new(kind, AddrMode::Indirect,  expr).wrapping());
             }
 
             if self.curr_token_is(&Token::Comma) && self.peek_token_is(&Token::RegisterY) {
                 self.next_token();
-                return Ok(Instruction::new(kind, UncertainAddrMode::IndirectY, expr).wrapping());
+                return Ok(Instruction::new(kind, AddrMode::IndirectY, expr).wrapping());
             } else {
                 return Err(anyhow!("Invalid operand that start with '['"));
             }
@@ -124,18 +132,36 @@ impl<'a> Parser<'a> {
 
         // Or, indirect-x
         if !self.expect_peek(&Token::Comma) {
-            Err(anyhow!("Invalid operand that start with '['"))?
+            bail!("Invalid operand that start with '['")
         }
         if !self.expect_peek(&Token::RegisterX) {
-            Err(anyhow!("Invalid operand that start with '['"))?
+            bail!("Invalid operand that start with '['")
         }
         if !self.expect_peek(&Token::RSquare) {
-            Err(anyhow!("Invalid operand that start with '['"))?
+            bail!("Invalid operand that start with '['")
         }
-        Ok(Instruction::new(kind, UncertainAddrMode::IndirectX, expr).wrapping())
+        Ok(Instruction::new(kind, AddrMode::IndirectX, expr).wrapping())
     }
 
-    fn absolute_or_zeropage(&self, kind: Mnemonic) -> Result<Statement> {
+    /// '<label' => operand is lsb of label
+    /// '>label' => operand is msb of label
+    fn zeropage(&self, kind: Mnemonic, is_lsb: bool) -> Result<Statement> {
+        let expr = self.expression(Order::Lowest)?;
+        let zp_kind = if is_lsb { ZPKind::Lsb } else { ZPKind::Msb };
+
+        if !self.expect_peek(&Token::Comma) {
+            return Ok(Instruction::new(kind, AddrMode::Zeropage(zp_kind), expr).wrapping());
+        }
+        if self.expect_peek(&Token::RegisterX) {
+            return Ok(Instruction::new(kind, AddrMode::ZeropageX(zp_kind), expr).wrapping());
+        }
+        if self.expect_peek(&Token::RegisterY) {
+            return Ok(Instruction::new(kind, AddrMode::ZeropageY(zp_kind), expr).wrapping());
+        }
+        Err(anyhow!("Missing register: expect x or y"))
+    }
+
+    fn absolute_or_implied(&self, kind: Mnemonic) -> Result<Statement> {
         let expr = self.expression(Order::Lowest)?;
 
         // If there is no expression in operand, this addressing mod is implied
@@ -143,7 +169,7 @@ impl<'a> Parser<'a> {
         match expr {
             Expression::EmptyExpr(_) => {
                 self.back_token();
-                return Ok(Instruction::new(kind, UncertainAddrMode::Implied, expr).wrapping());
+                return Ok(Instruction::new(kind, AddrMode::Implied, expr).wrapping());
             }
             _ => (),
         }
@@ -151,13 +177,13 @@ impl<'a> Parser<'a> {
         // In this time, I don't know the length of operand, so I temporary defined
         // that addressing mode is absolute(none or X or Y).
         if !self.expect_peek(&Token::Comma) {
-            return Ok(Instruction::new(kind, UncertainAddrMode::AbsoluteOrZeropage, expr).wrapping());
+            return Ok(Instruction::new(kind, AddrMode::Absolute, expr).wrapping());
         }
         if self.expect_peek(&Token::RegisterX) {
-            return Ok(Instruction::new(kind, UncertainAddrMode::AbsoluteOrZeropageX, expr).wrapping());
+            return Ok(Instruction::new(kind, AddrMode::AbsoluteX, expr).wrapping());
         }
         if self.expect_peek(&Token::RegisterY) {
-            return Ok(Instruction::new(kind, UncertainAddrMode::AbsoluteOrZeropageY, expr).wrapping());
+            return Ok(Instruction::new(kind, AddrMode::AbsoluteY, expr).wrapping());
         }
         Err(anyhow!("Missing register: expect x or y"))
     }

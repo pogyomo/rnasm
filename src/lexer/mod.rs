@@ -38,6 +38,14 @@ impl<'a> Lexer<'a> {
                 self.next_char();
                 Some(Token::Assign)
             }
+            '<' => {
+                self.next_char();
+                Some(Token::LTSign)
+            }
+            '>' => {
+                self.next_char();
+                Some(Token::GTSign)
+            }
             '+' => {
                 self.next_char();
                 Some(Token::Plus)

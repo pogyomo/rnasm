@@ -20,23 +20,15 @@ pub enum AddrMode {
     IndirectX,
     IndirectY,
     Relative,
-    Zeropage,
-    ZeropageX,
-    ZeropageY,
+    Zeropage(ZPKind),
+    ZeropageX(ZPKind),
+    ZeropageY(ZPKind),
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-/// This Enum will be used to represent addressing mode
-/// when the length of operand is unresolved.
-pub enum UncertainAddrMode {
-    Accumulator,
-    AbsoluteOrZeropage,
-    AbsoluteOrZeropageX,
-    AbsoluteOrZeropageY,
-    Immediate,
-    Implied,
-    Indirect,
-    IndirectX,
-    IndirectY,
-    Relative,
+pub enum ZPKind {
+    /// Use lsb of expression as operand
+    Lsb,
+    /// Use msb of expression as operand
+    Msb,
 }

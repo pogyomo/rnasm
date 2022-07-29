@@ -32,6 +32,10 @@ pub enum Token<'a> {
     // One-character token
     /// '='
     Assign,
+    /// '<'
+    LTSign,
+    /// '>'
+    GTSign,
     /// '+'
     Plus,
     /// '-'
