@@ -4,14 +4,17 @@
 // Memo: Is there any way to remove (stop to use) self.back_token?
 
 use std::cell::Cell;
+use std::rc::Rc;
 use crate::lexer::token::{Token, Mnemonic, IntBase};
 use self::ast::{
     Program, Statement, Expression, Assign, Identifier, Instruction,
-    AddrMode, Integer, IntegerKind, CurrAddr, EmptyExpr
+    AddrMode, Integer, IntegerKind, CurrAddr, EmptyExpr, InfixOp, Infix
 };
+use self::order::Order;
 use anyhow::{Result, anyhow};
 
 pub mod ast;
+mod order;
 
 pub struct Parser<'a> {
     /// List of Token that parser use.
@@ -37,7 +40,7 @@ impl<'a> Parser<'a> {
 }
 
 impl<'a> Parser<'a> {
-    /// In the end of this function, the next token must be unused.
+    // In the end of this function, the next token must be unused.
     fn statement(&self) -> Result<Statement> {
         match self.curr_token()? {
             Token::Ident { literal } => {
@@ -46,7 +49,7 @@ impl<'a> Parser<'a> {
             }
             Token::Mnemonic { kind } => {
                 self.next_token();
-                self.instruction(kind)
+                self.instruction(*kind)
             }
             token => Err(anyhow!("There is no statement that start with {:?}", token)),
         }
@@ -54,14 +57,15 @@ impl<'a> Parser<'a> {
 }
 
 impl<'a> Parser<'a> {
+    /// Assign expression to identifier
     fn assign(&self, name: String) -> Result<Statement> {
         let expr = match self.curr_token()? {
             Token::Assign => {
                 self.next_token();
-                self.expression()?
+                self.expression(Order::Lowest)?
             }
             token => {
-                if token != Token::Colon {
+                if *token != Token::Colon {
                     self.back_token(); // TODO: This operation may be removable
                 }
                 CurrAddr::new().wrapping()
@@ -72,6 +76,7 @@ impl<'a> Parser<'a> {
 }
 
 impl<'a> Parser<'a> {
+    /// Get expression with addressing mode
     fn instruction(&self, kind: Mnemonic) -> Result<Statement> {
         match self.curr_token()? {
             Token::RegisterA => {
@@ -80,12 +85,12 @@ impl<'a> Parser<'a> {
             }
             Token::Sharp => {
                 self.next_token();
-                let expr = self.expression()?;
+                let expr = self.expression(Order::Lowest)?;
                 Ok(Instruction::new(kind, AddrMode::Immediate, expr).wrapping())
             }
             Token::AtSign => {
                 self.next_token();
-                let expr = self.expression()?;
+                let expr = self.expression(Order::Lowest)?;
                 Ok(Instruction::new(kind, AddrMode::Relative, expr).wrapping())
             }
             Token::LSquare => self.indirect(kind),
@@ -95,7 +100,7 @@ impl<'a> Parser<'a> {
 
     fn indirect(&self, kind: Mnemonic) -> Result<Statement> {
         self.next_token();
-        let expr = self.expression()?;
+        let expr = self.expression(Order::Lowest)?;
 
         // Eiter indirect or indirect-y
         if self.expect_peek(&Token::RSquare) {
@@ -125,7 +130,7 @@ impl<'a> Parser<'a> {
     }
 
     fn absolute_or_zeropage(&self, kind: Mnemonic) -> Result<Statement> {
-        let expr = self.expression()?;
+        let expr = self.expression(Order::Lowest)?;
 
         // If there is no expression in operand, this addressing mod is implied
         // and return early.
@@ -152,13 +157,45 @@ impl<'a> Parser<'a> {
 }
 
 impl<'a> Parser<'a> {
-    /// In the end of this function, the next token must be unused.
-    fn expression(&self) -> Result<Expression> {
-        match self.curr_token()? {
-            Token::Ident { literal }     => Ok(self.identifier(literal)?.wrapping()),
-            Token::Int { literal, base } => Ok(self.integer(literal, base)?.wrapping()),
-            _ => Ok(EmptyExpr::new().wrapping())
+    // In the end of this function, the next token must be unused.
+    fn expression(&self, order: Order) -> Result<Expression> {
+        let mut left = match self.curr_token()? {
+            // Literal
+            Token::Ident { literal }     => self.identifier(literal)?.wrapping(),
+            Token::Int { literal, base } => self.integer(literal, *base)?.wrapping(),
+
+            // '(' <expression> ')'
+            Token::LParen => self.group()?,
+
+            // No expression
+            _ => EmptyExpr::new().wrapping(),
+        };
+
+        while order < self.peek_order().unwrap_or(Order::Lowest) {
+            match self.peek_token()? {
+                // Infix operator
+                Token::Plus => {
+                    self.next_token();
+                    left = self.infix(left, InfixOp::Add)?;
+                }
+                Token::Minus => {
+                    self.next_token();
+                    left = self.infix(left, InfixOp::Sub)?;
+                }
+                Token::Star => {
+                    self.next_token();
+                    left = self.infix(left, InfixOp::Mul)?;
+                }
+                Token::Slash => {
+                    self.next_token();
+                    left = self.infix(left, InfixOp::Div)?;
+                }
+
+                // No operator
+                _ => return Ok(left),
+            }
         }
+        Ok(left)
     }
 
     fn identifier(&self, name: &str) -> Result<Identifier> {
@@ -183,21 +220,38 @@ impl<'a> Parser<'a> {
             Err(err)  => Err(err)?,
         }
     }
+
+    fn infix(&self, left: Expression, op: InfixOp) -> Result<Expression> {
+        let order = self.curr_order()?;
+        self.next_token();
+        let right = self.expression(order)?;
+        Ok(Infix::new(op, Rc::new(left), Rc::new(right)).wrapping())
+    }
+
+    fn group(&self) -> Result<Expression> {
+        self.next_token();
+        let expr = self.expression(Order::Lowest)?;
+        if !self.expect_peek(&Token::RParen) {
+            Err(anyhow!("Group must end with ')'"))
+        } else {
+            Ok(expr)
+        }
+    }
 }
 
 impl<'a> Parser<'a> {
     /// Get current token. If it failed, return error
-    fn curr_token(&self) -> Result<Token> {
+    fn curr_token(&self) -> Result<&Token> {
         match self.token.get(self.curr.get() + 0) {
-            Some(token) => Ok(*token),
+            Some(token) => Ok(token),
             None => Err(anyhow!("Failed to read curr token: pos {}", self.curr.get())),
         }
     }
 
     /// Get next token. If it failed, return error
-    fn peek_token(&self) -> Result<Token> {
+    fn peek_token(&self) -> Result<&Token> {
         match self.token.get(self.curr.get() + 1) {
-            Some(token) => Ok(*token),
+            Some(token) => Ok(token),
             None => Err(anyhow!("Failed to read next token: pos {}", self.curr.get())),
         }
     }
@@ -205,7 +259,7 @@ impl<'a> Parser<'a> {
     fn curr_token_is(&self, token: &Token) -> bool {
         use std::mem;
         match self.curr_token() {
-            Ok(val) => mem::discriminant(&val) == mem::discriminant(token),
+            Ok(val) => mem::discriminant(val) == mem::discriminant(token),
             Err(_)  => false,
         }
     }
@@ -213,7 +267,7 @@ impl<'a> Parser<'a> {
     fn peek_token_is(&self, token: &Token) -> bool {
         use std::mem;
         match self.peek_token() {
-            Ok(val) => mem::discriminant(&val) == mem::discriminant(token),
+            Ok(val) => mem::discriminant(val) == mem::discriminant(token),
             Err(_)  => false,
         }
     }
@@ -227,6 +281,25 @@ impl<'a> Parser<'a> {
         } else {
             false
         }
+    }
+
+    /// Get given token's order
+    fn token_order(token: &Token) -> Order {
+        match token {
+            Token::Plus | Token::Minus => Order::AddAndSub,
+            Token::Star | Token::Slash => Order::MulAndDiv,
+            _ => Order::Lowest,
+        }
+    }
+
+    /// Get current token's order
+    fn curr_order(&self) -> Result<Order> {
+        Ok(Parser::token_order(self.curr_token()?))
+    }
+
+    /// Get next token's order
+    fn peek_order(&self) -> Result<Order> {
+        Ok(Parser::token_order(self.peek_token()?))
     }
 
     fn back_token(&self) {

@@ -202,7 +202,16 @@ impl Prefix {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub enum InfixOp {}
+pub enum InfixOp {
+    /// '+'
+    Add,
+    /// '-'
+    Sub,
+    /// '*'
+    Mul,
+    /// '/'
+    Div,
+}
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Infix {
