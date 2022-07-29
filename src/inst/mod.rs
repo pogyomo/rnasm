@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Mnemonic {
     Adc, And, Asl, Bcc, Bcs, Beq, Bit, Bmi, Bne, Bpl, Brk, Bvc, Bvs, Clc,
@@ -21,4 +23,20 @@ pub enum AddrMode {
     Zeropage,
     ZeropageX,
     ZeropageY,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+/// This Enum will be used to represent addressing mode
+/// when the length of operand is unresolved.
+pub enum UncertainAddrMode {
+    Accumulator,
+    AbsoluteOrZeropage,
+    AbsoluteOrZeropageX,
+    AbsoluteOrZeropageY,
+    Immediate,
+    Implied,
+    Indirect,
+    IndirectX,
+    IndirectY,
+    Relative,
 }
