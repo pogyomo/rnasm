@@ -9,7 +9,7 @@
 
 use std::cell::Cell;
 use std::rc::Rc;
-use crate::lexer::token::{Token, IntBase};
+use crate::lexer::token::{TokenList, Token, IntBase};
 use crate::inst::{Mnemonic, UncertainAddrMode};
 use self::ast::{Program, Statement, Expression, Assign, Identifier, Instruction};
 use self::ast::{Integer, CurrAddr, EmptyExpr, InfixOp, Infix};
@@ -21,14 +21,14 @@ mod order;
 
 pub struct Parser<'a> {
     /// List of Token that parser use.
-    token: Vec<Token<'a>>,
+    token: &'a TokenList<'a>,
 
     /// Position of token that is currently used by parser.
     curr: Cell<usize>,
 }
 
 impl<'a> Parser<'a> {
-    pub fn new(token: Vec<Token<'a>>) -> Parser<'a> {
+    pub fn new(token: &'a TokenList<'a>) -> Parser<'a> {
         Parser { token, curr: Cell::new(0) }
     }
 
@@ -245,7 +245,7 @@ impl<'a> Parser<'a> {
 impl<'a> Parser<'a> {
     /// Get current token. If it failed, return error
     fn curr_token(&self) -> Result<&Token> {
-        match self.token.get(self.curr.get() + 0) {
+        match self.token.body.get(self.curr.get() + 0) {
             Some(token) => Ok(token),
             None => Err(anyhow!("Failed to read curr token: pos {}", self.curr.get())),
         }
@@ -253,7 +253,7 @@ impl<'a> Parser<'a> {
 
     /// Get next token. If it failed, return error
     fn peek_token(&self) -> Result<&Token> {
-        match self.token.get(self.curr.get() + 1) {
+        match self.token.body.get(self.curr.get() + 1) {
             Some(token) => Ok(token),
             None => Err(anyhow!("Failed to read next token: pos {}", self.curr.get())),
         }
@@ -312,7 +312,7 @@ impl<'a> Parser<'a> {
     }
 
     fn next_token(&self) {
-        if self.token.len() - 1 > self.curr.get() {
+        if self.token.body.len() - 1 > self.curr.get() {
             self.curr.set(self.curr.get() + 1);
         }
     }

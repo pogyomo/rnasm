@@ -13,6 +13,6 @@ fn main() {
         let lexer = Lexer::new(buf.as_str());
         let token = lexer.tokenize();
         println!("{:#?}", &token);
-        println!("{:#?}", Parser::new(token).parse().unwrap());
+        println!("{:#?}", Parser::new(&token).parse().unwrap());
     }
 }

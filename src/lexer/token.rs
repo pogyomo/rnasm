@@ -1,5 +1,16 @@
 use crate::inst::Mnemonic;
 
+#[derive(Debug)]
+pub struct TokenList<'a> {
+    pub body: Vec<Token<'a>>,
+}
+
+impl<'a> TokenList<'a> {
+    pub fn new(body: Vec<Token<'a>>) -> TokenList<'a> {
+        TokenList { body }
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Token<'a> {
     // Special tokne

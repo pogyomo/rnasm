@@ -3,7 +3,7 @@ pub mod token;
 use std::cell::Cell;
 use std::collections::HashMap;
 
-use self::token::{Token, IntBase};
+use self::token::{TokenList, Token, IntBase};
 use crate::inst::Mnemonic;
 
 use once_cell::sync::Lazy;
@@ -20,13 +20,13 @@ impl<'a> Lexer<'a> {
     }
 
     /// Construct Vec<Token> from input
-    pub fn tokenize(&'a self) -> Vec<Token<'a>> {
+    pub fn tokenize(&'a self) -> TokenList<'a> {
         let mut ret = Vec::new();
         while let Some(token) = self.token() {
             ret.push(token);
         }
         ret.push(Token::Eof);
-        ret
+        TokenList::new(ret)
     }
 }
 
