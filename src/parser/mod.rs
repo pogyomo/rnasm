@@ -1,17 +1,19 @@
-// Memo: At the begin of all function, current token must be unused token,
+// Memo:
+//  At the begin of all function, current token must be unused token,
 // and previous token must be used token.
+//  At the end of all function, next token must be unused token,
+// and current token must be used token.
 // 
-// Memo: Is there any way to remove (stop to use) self.back_token?
+// Memo:
+//  Is there any way to remove (stop to use) self.back_token?
 
 use std::cell::Cell;
 use std::rc::Rc;
 use crate::lexer::token::{Token, Mnemonic, IntBase};
-use self::ast::{
-    Program, Statement, Expression, Assign, Identifier, Instruction,
-    AddrMode, Integer, IntegerKind, CurrAddr, EmptyExpr, InfixOp, Infix
-};
+use self::ast::{Program, Statement, Expression, Assign, Identifier, Instruction};
+use self::ast::{AddrMode, Integer, IntegerKind, CurrAddr, EmptyExpr, InfixOp, Infix};
 use self::order::Order;
-use anyhow::{Result, anyhow};
+use anyhow::{Result, anyhow, Context};
 
 pub mod ast;
 mod order;
@@ -40,7 +42,6 @@ impl<'a> Parser<'a> {
 }
 
 impl<'a> Parser<'a> {
-    // In the end of this function, the next token must be unused.
     fn statement(&self) -> Result<Statement> {
         match self.curr_token()? {
             Token::Ident { literal } => {
@@ -93,13 +94,17 @@ impl<'a> Parser<'a> {
                 let expr = self.expression(Order::Lowest)?;
                 Ok(Instruction::new(kind, AddrMode::Relative, expr).wrapping())
             }
-            Token::LSquare => self.indirect(kind),
-            _ => self.absolute_or_zeropage(kind),
+            Token::LSquare => {
+                self.next_token();
+                self.indirect(kind)
+            }
+            _ => {
+                self.absolute_or_zeropage(kind)
+            }
         }
     }
 
     fn indirect(&self, kind: Mnemonic) -> Result<Statement> {
-        self.next_token();
         let expr = self.expression(Order::Lowest)?;
 
         // Eiter indirect or indirect-y
@@ -217,7 +222,7 @@ impl<'a> Parser<'a> {
         }
         match u16::from_str_radix(value.as_str(), base) {
             Ok(value) => Ok(Integer::new(value, IntegerKind::Word)),
-            Err(err)  => Err(err)?,
+            Err(err)  => Err(err).with_context(|| format!("Integer must be less than 0xFFFF"))?,
         }
     }
 
@@ -232,7 +237,7 @@ impl<'a> Parser<'a> {
         self.next_token();
         let expr = self.expression(Order::Lowest)?;
         if !self.expect_peek(&Token::RParen) {
-            Err(anyhow!("Group must end with ')'"))
+            Err(anyhow!("A group have to end with ')'"))
         } else {
             Ok(expr)
         }
