@@ -1,13 +1,48 @@
-#![allow(dead_code)]
-
 use std::rc::Rc;
-
+use std::fmt::Debug;
 use crate::lexer::token::Mnemonic;
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(PartialEq, Eq, Clone)]
+pub struct Program {
+    body: Vec<Statement>
+}
+
+impl Debug for Program {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if f.alternate() {
+            write!(f, "{:#?}", self.body)
+        } else {
+            write!(f, "{:?}", self.body)
+        }
+    }
+}
+
+impl Program {
+    pub fn new(body: Vec<Statement>) -> Program {
+        Program { body }
+    }
+}
+
+#[derive(PartialEq, Eq, Clone)]
 pub enum Statement {
     Assign(Assign),
     Instruction(Instruction),
+}
+
+impl Debug for Statement {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if f.alternate() {
+            match self {
+                Statement::Assign(val)      => write!(f, "{:#?}", val),
+                Statement::Instruction(val) => write!(f, "{:#?}", val),
+            }
+        } else {
+            match self {
+                Statement::Assign(val)      => write!(f, "{:?}", val),
+                Statement::Instruction(val) => write!(f, "{:?}", val),
+            }
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -60,7 +95,7 @@ impl Instruction {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(PartialEq, Eq, Clone)]
 pub enum Expression {
     // Literal
     /// e.g. 'Label_with_underline'
@@ -81,6 +116,30 @@ pub enum Expression {
     /// There is instructions that don't have operand, so this expression
     /// will be used to parse these instruction.
     EmptyExpr(EmptyExpr),
+}
+
+impl Debug for Expression {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if f.alternate() {
+            match self {
+                Expression::Identifier(val) => write!(f, "{:#?}", val),
+                Expression::Integer(val)    => write!(f, "{:#?}", val),
+                Expression::Prefix(val)     => write!(f, "{:#?}", val),
+                Expression::Infix(val)      => write!(f, "{:#?}", val),
+                Expression::CurrAddr(val)   => write!(f, "{:#?}", val),
+                Expression::EmptyExpr(val)  => write!(f, "{:#?}", val),
+            }
+        } else {
+            match self {
+                Expression::Identifier(val) => write!(f, "{:?}", val),
+                Expression::Integer(val)    => write!(f, "{:?}", val),
+                Expression::Prefix(val)     => write!(f, "{:?}", val),
+                Expression::Infix(val)      => write!(f, "{:?}", val),
+                Expression::CurrAddr(val)   => write!(f, "{:?}", val),
+                Expression::EmptyExpr(val)  => write!(f, "{:?}", val),
+            }
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]

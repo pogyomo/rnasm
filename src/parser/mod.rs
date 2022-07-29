@@ -1,14 +1,12 @@
-#![allow(dead_code)]
-
-// Memo: At the begin of all function, current token must be unused token, and previous token must be
-// used token.
+// Memo: At the begin of all function, current token must be unused token,
+// and previous token must be used token.
 // 
 // Memo: Is there any way to remove (stop to use) self.back_token?
 
 use std::cell::Cell;
 use crate::lexer::token::{Token, Mnemonic, IntBase};
 use self::ast::{
-    Statement, Expression, Assign, Identifier, Instruction,
+    Program, Statement, Expression, Assign, Identifier, Instruction,
     AddrMode, Integer, IntegerKind, CurrAddr, EmptyExpr
 };
 use anyhow::{Result, anyhow};
@@ -28,13 +26,13 @@ impl<'a> Parser<'a> {
         Parser { token, curr: Cell::new(0) }
     }
 
-    pub fn parse(&self) -> Result<Vec<Statement>> {
+    pub fn parse(&self) -> Result<Program> {
         let mut ret = Vec::new();
         while !self.curr_token_is(&Token::Eof) {
             ret.push(self.statement()?);
             self.next_token();
         }
-        Ok(ret)
+        Ok(Program::new(ret))
     }
 }
 
@@ -149,7 +147,7 @@ impl<'a> Parser<'a> {
         if self.expect_peek(&Token::RegisterY) {
             return Ok(Instruction::new(kind, AddrMode::AbsoluteOrZeropageY, expr).wrapping());
         }
-        Err(anyhow!("Missing register x or y"))
+        Err(anyhow!("Missing register: expect x or y"))
     }
 }
 
