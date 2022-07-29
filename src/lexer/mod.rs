@@ -50,8 +50,14 @@ impl<'a> Lexer<'a> {
                 Some(Token::Star)
             }
             '/' => {
-                self.next_char();
-                Some(Token::Slash)
+                if self.peek_char_is(|c| c == '/') {
+                    // Trim command such that '// --comment--'
+                    self.trim_start_with(|c| c != '\n');
+                    self.token()
+                } else {
+                    self.next_char();
+                    Some(Token::Slash)
+                }
             }
             '#' => {
                 self.next_char();
