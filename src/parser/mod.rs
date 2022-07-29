@@ -11,7 +11,7 @@ use std::cell::Cell;
 use std::rc::Rc;
 use crate::lexer::token::{Token, Mnemonic, IntBase};
 use self::ast::{Program, Statement, Expression, Assign, Identifier, Instruction};
-use self::ast::{AddrMode, Integer, IntegerKind, CurrAddr, EmptyExpr, InfixOp, Infix};
+use self::ast::{AddrMode, Integer, CurrAddr, EmptyExpr, InfixOp, Infix};
 use self::order::Order;
 use anyhow::{Result, anyhow, Context};
 
@@ -216,12 +216,8 @@ impl<'a> Parser<'a> {
             IntBase::Hexadecimal => 16,
         };
 
-        match u8::from_str_radix(value.as_str(), base) {
-            Ok(value) => return Ok(Integer::new(value as u16, IntegerKind::Byte)),
-            Err(_) => (),
-        }
         match u16::from_str_radix(value.as_str(), base) {
-            Ok(value) => Ok(Integer::new(value, IntegerKind::Word)),
+            Ok(value) => Ok(Integer::new(value)),
             Err(err)  => Err(err).with_context(|| format!("Integer must be less than 0xFFFF"))?,
         }
     }

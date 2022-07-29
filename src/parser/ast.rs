@@ -4,7 +4,7 @@ use crate::lexer::token::Mnemonic;
 
 #[derive(PartialEq, Eq, Clone)]
 pub struct Program {
-    body: Vec<Statement>
+    pub body: Vec<Statement>
 }
 
 impl Debug for Program {
@@ -47,8 +47,8 @@ impl Debug for Statement {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Assign {
-    ident: Identifier,
-    expr:  Expression,
+    pub ident: Identifier,
+    pub expr:  Expression,
 }
 
 impl Assign {
@@ -157,24 +157,14 @@ impl Identifier {
     }
 }
 
-// Kind of integer (Operand of 6502 is either 8-bit, 16-bit or none)
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub enum IntegerKind {
-    /// 8-bit integer
-    Byte,
-    /// 16-bit integer
-    Word
-}
-
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Integer {
     value: u16,
-    kind:  IntegerKind,
 }
 
 impl Integer {
-    pub fn new(value: u16, kind: IntegerKind) -> Integer {
-        Integer { value, kind }
+    pub fn new(value: u16) -> Integer {
+        Integer { value }
     }
 
     pub fn wrapping(self) -> Expression {
