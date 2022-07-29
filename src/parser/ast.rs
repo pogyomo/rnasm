@@ -1,6 +1,6 @@
 use std::rc::Rc;
 use std::fmt::Debug;
-use crate::lexer::token::Mnemonic;
+use crate::inst::{Mnemonic, AddrMode};
 
 #[derive(PartialEq, Eq, Clone)]
 pub struct Program {
@@ -59,23 +59,6 @@ impl Assign {
     pub fn wrapping(self) -> Statement {
         Statement::Assign(self)
     }
-}
-
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub enum AddrMode {
-    Accumulator,
-
-    /// While parsing, parser can't detect that operand is either 8bit or 16bit.
-    AbsoluteOrZeropage,
-    AbsoluteOrZeropageX,
-    AbsoluteOrZeropageY,
-
-    Immediate,
-    Implied,
-    Indirect,
-    IndirectX,
-    IndirectY,
-    Relative,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]

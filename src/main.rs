@@ -1,5 +1,6 @@
 mod lexer;
 mod parser;
+mod inst;
 
 use std::io::{stdin, stdout, Write, Read};
 use lexer::Lexer;

@@ -3,7 +3,8 @@ pub mod token;
 use std::cell::Cell;
 use std::collections::HashMap;
 
-use self::token::{Token, IntBase, Mnemonic};
+use self::token::{Token, IntBase};
+use crate::inst::Mnemonic;
 
 use once_cell::sync::Lazy;
 

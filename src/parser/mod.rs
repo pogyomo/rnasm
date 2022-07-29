@@ -9,9 +9,10 @@
 
 use std::cell::Cell;
 use std::rc::Rc;
-use crate::lexer::token::{Token, Mnemonic, IntBase};
+use crate::lexer::token::{Token, IntBase};
+use crate::inst::{Mnemonic, AddrMode};
 use self::ast::{Program, Statement, Expression, Assign, Identifier, Instruction};
-use self::ast::{AddrMode, Integer, CurrAddr, EmptyExpr, InfixOp, Infix};
+use self::ast::{Integer, CurrAddr, EmptyExpr, InfixOp, Infix};
 use self::order::Order;
 use anyhow::{Result, anyhow, Context};
 
@@ -147,15 +148,16 @@ impl<'a> Parser<'a> {
             _ => (),
         }
 
+        // In this time, I don't know the length of operand, so I temporary defined
+        // that addressing mode is absolute(none or X or Y).
         if !self.expect_peek(&Token::Comma) {
-            return Ok(Instruction::new(kind, AddrMode::AbsoluteOrZeropage, expr).wrapping());
+            return Ok(Instruction::new(kind, AddrMode::Absolute, expr).wrapping());
         }
-
         if self.expect_peek(&Token::RegisterX) {
-            return Ok(Instruction::new(kind, AddrMode::AbsoluteOrZeropageX, expr).wrapping());
+            return Ok(Instruction::new(kind, AddrMode::AbsoluteX, expr).wrapping());
         }
         if self.expect_peek(&Token::RegisterY) {
-            return Ok(Instruction::new(kind, AddrMode::AbsoluteOrZeropageY, expr).wrapping());
+            return Ok(Instruction::new(kind, AddrMode::AbsoluteY, expr).wrapping());
         }
         Err(anyhow!("Missing register: expect x or y"))
     }
