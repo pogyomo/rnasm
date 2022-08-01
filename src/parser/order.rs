@@ -3,6 +3,7 @@ pub enum Order {
     /// Any other order of token
     Lowest,
     /// Prefix of '<' and '>'
+    /// This operator will surround expression
     TakeByte,
     /// '<<' and '>>'
     Shift,

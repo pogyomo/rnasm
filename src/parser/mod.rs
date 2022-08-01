@@ -119,6 +119,7 @@ impl<'a> Parser<'a> {
 
             if self.curr_token_is(&Token::Comma) && self.peek_token_is(&Token::RegisterY) {
                 self.next_token();
+                let expr = Prefix::new(PrefixOp::TakeLSB, Rc::new(expr)).wrapping();
                 return Ok(Instruction::new(kind, UncertainAddrMode::IndirectY, expr).wrapping());
             } else {
                 return Err(anyhow!("Invalid operand that start with '['"));
@@ -135,6 +136,7 @@ impl<'a> Parser<'a> {
         if !self.expect_peek(&Token::RSquare) {
             bail!("Invalid operand that start with '['")
         }
+        let expr = Prefix::new(PrefixOp::TakeLSB, Rc::new(expr)).wrapping();
         Ok(Instruction::new(kind, UncertainAddrMode::IndirectX, expr).wrapping())
     }
 
