@@ -35,6 +35,7 @@ pub struct Assembler<'a> {
 }
 
 impl<'a> Assembler<'a> {
+    /// Create assembler
     pub fn new(list: &'a InstList) -> Assembler<'a> {
         Assembler {
             list,
@@ -43,6 +44,7 @@ impl<'a> Assembler<'a> {
         }
     }
 
+    /// Assemble the list of instruction
     pub fn assemble(&self) -> Option<Object> {
         let mut body = Vec::new();
         while self.curr_pos.get() < self.list.body.len() {
