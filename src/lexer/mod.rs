@@ -73,10 +73,17 @@ impl<'a> Lexer<'a> {
                     // Trim command such that '// --comment--'
                     self.trim_start_with(|c| c != '\n');
                     self.token()
+                } else if self.peek_char_is(|c| c == '*'){
+                    self.trim_nested_comment()?;
+                    self.token()
                 } else {
                     self.next_char();
                     Some(Token::Slash)
                 }
+            }
+            ';' => {
+                self.trim_start_with(|c| c != '\n');
+                self.token()
             }
             '#' => {
                 self.next_char();
@@ -323,5 +330,23 @@ impl<'a> Lexer<'a> {
         let sep   = input.find(|c: char| !f(c)).unwrap_or(input.len());
         self.input.set(&input[sep..]);
         &input[..sep]
+    }
+
+    fn trim_nested_comment(&self) -> Option<()> {
+        self.next_char();
+        self.next_char();
+        loop {
+            match (self.curr_char()?, self.peek_char()?) {
+                ('/', '*') => {
+                    self.trim_nested_comment();
+                }
+                ('*', '/') => {
+                    self.next_char();
+                    self.next_char();
+                    break Some(());
+                }
+                _ => self.next_char(),
+            }
+        }
     }
 }
