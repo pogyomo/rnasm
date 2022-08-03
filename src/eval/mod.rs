@@ -123,7 +123,10 @@ impl<'a> Eval<'a> {
                                 let value = (int.value >> 8) as u8;
                                 inst::Instruction::new(val.kind, AddrMode::Immediate(value))
                             }
-                            _ => return None,
+                            IntKind::Word => {
+                                let value = int.value as u8;
+                                inst::Instruction::new(val.kind, AddrMode::Immediate(value))
+                            }
                         }
                     }
                     UncertainAddrMode::IndirectX => {
@@ -137,7 +140,10 @@ impl<'a> Eval<'a> {
                                 let value = (int.value >> 8) as u8;
                                 inst::Instruction::new(val.kind, AddrMode::IndirectX(value))
                             }
-                            _ => return None,
+                            IntKind::Word => {
+                                let value = int.value as u8;
+                                inst::Instruction::new(val.kind, AddrMode::Immediate(value))
+                            }
                         }
                     }
                     UncertainAddrMode::IndirectY => {
@@ -151,7 +157,10 @@ impl<'a> Eval<'a> {
                                 let value = (int.value >> 8) as u8;
                                 inst::Instruction::new(val.kind, AddrMode::IndirectY(value))
                             }
-                            _ => return None,
+                            IntKind::Word => {
+                                let value = int.value as u8;
+                                inst::Instruction::new(val.kind, AddrMode::Immediate(value))
+                            }
                         }
                     }
                     UncertainAddrMode::Indirect => {
@@ -211,23 +220,14 @@ impl<'a> Eval<'a> {
     fn infix(&self, infix: &Infix) -> Option<Integer> {
         let lhs = self.expr(infix.lhs_expr.as_ref())?;
         let rhs = self.expr(infix.rhs_expr.as_ref())?;
-        let val = match infix.op {
-            InfixOp::Add    => lhs.value.wrapping_add(rhs.value),
-            InfixOp::Sub    => lhs.value.wrapping_sub(rhs.value),
-            InfixOp::Mul    => lhs.value.wrapping_mul(rhs.value),
-            InfixOp::Div    => lhs.value.wrapping_div(rhs.value),
-            InfixOp::LShift => lhs.value.wrapping_shl(rhs.value as u32),
-            InfixOp::RShift => lhs.value.wrapping_shl(rhs.value as u32),
-        };
-        let kind = if lhs.kind == IntKind::Word && rhs.kind == IntKind::Word {
-            IntKind::Word
-        } else if lhs.kind == rhs.kind {
-            lhs.kind
-        } else {
-            // (<num) + (>num) is undefined
-            return None
-        };
-        Some(Integer::new(val, kind))
+        Some(match infix.op {
+            InfixOp::Add    => lhs +  rhs,
+            InfixOp::Sub    => lhs -  rhs,
+            InfixOp::Mul    => lhs *  rhs,
+            InfixOp::Div    => lhs /  rhs,
+            InfixOp::LShift => lhs << rhs,
+            InfixOp::RShift => lhs >> rhs,
+        })
     }
 }
 

@@ -23,16 +23,5 @@ fn main() {
         let list   = eval.eval();
         let asm    = Assembler::new(&list);
         println!("{:#?}", asm.assemble());
-        println!("{:#?}", 
-                 Assembler::new(
-                     &Eval::new(
-                         &Parser::new(
-                             &Lexer::new(
-                                 buf.as_str()
-                            ).tokenize()
-                         ).parse().unwrap(), 0, Rc::new(Environment::new())
-                     ).eval()
-                 ).assemble()
-             );
     }
 }
