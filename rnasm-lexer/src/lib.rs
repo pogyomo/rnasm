@@ -41,6 +41,7 @@ impl Lexer {
     }
 
     /// Construct list of token by consuming itself.
+    /// If more than one error occure while lexing input, return the errors.
     pub fn lex(self) -> Result<Vec<Token>, Vec<LexerError>> {
         match NonEmpty::from_vec(self.input) {
             Some(vec) => NonEmptyLexer::new(vec).lex(),

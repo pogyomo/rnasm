@@ -13,7 +13,7 @@
 //! There exist mainly two pattern to search and hold tokens.
 //!
 //! 1. Use `next_or_err` to get token for searching token which must exist.
-//! If the token is expected token, do something for the token.
+//! If the token is expected token, do something to the token.
 //! Otherwise, throw error.
 //!
 //! 2. Use `peek_or_err` to get token for searching token which maybe exist.
@@ -64,6 +64,7 @@ pub struct Parser {
 
 impl Parser {
     /// Parse given token list by consuming itself.
+    /// If parsing failed at more than one statement, return errors.
     pub fn parse(self) -> Result<Vec<Statement>, Vec<ParserError>> {
         // Split given token list into list of tokens where each tokens
         // represent statment.
