@@ -28,7 +28,7 @@ use rnasm_ast::{
     LabelStatement, InstStatement, InstName, PseudoInstruction, PseudoOperand,
     ActualOperand, ActualInstruction, Expression, Accumulator, CastStrategy, 
     Immediate, Indirect, IndexableRegister, Zeropage, AbsoluteOrRelative,
-    InfixExpr, InfixOp, Integer, Symbol, LocalSymbol, GlobalSymbol, Surrounded
+    InfixExpr, InfixOp, Integer, Symbol, LocalSymbol, GlobalSymbol, Surrounded, StringExpr
 };
 use rnasm_span::{Span, Spannable};
 use rnasm_token::{Token, TokenKind};
@@ -558,6 +558,9 @@ impl NonEmptyParser {
             TokenKind::Symbol(name) => {
                 let symbol = GlobalSymbol::new(stack.span(), name.clone());
                 Ok(Symbol::GlobalSymbol(symbol).into())
+            }
+            TokenKind::String(value) => {
+                Ok(StringExpr::new(stack.span(), value.clone()).into())
             }
             TokenKind::Period => {
                 stack.push(self.next_or_err("symbol")?);

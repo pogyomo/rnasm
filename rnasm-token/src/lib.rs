@@ -28,6 +28,7 @@ pub enum TokenKind {
     // Literal
     Integer(u16),
     Symbol(String),
+    String(String),
 
     // Keyword
     /// a | A

@@ -104,6 +104,10 @@ impl NonEmptyLexer {
             return Some(Ok(token));
         }
 
+        if let Some(token) = self.string() {
+            return Some(Ok(token));
+        }
+
         let offset = self.offset();
         let kind = match self.next()? {
             '+'  => TokenKind::Plus,
@@ -233,6 +237,29 @@ impl NonEmptyLexer {
             _ => TokenKind::Symbol(body),
         };
         Some(Token::new(span, kind))
+    }
+}
+
+impl NonEmptyLexer {
+    /// Try to create string token. If success, advance position.
+    fn string(&mut self) -> Option<Token> {
+        let offset = self.offset();
+
+        if !self.consume('"') {
+            return None;
+        }
+
+        let mut body = String::new();
+        while let Some(ch) = self.next() {
+            if ch == '"' {
+                break;
+            } else {
+                body.push(ch);
+            }
+        }
+
+        let span = Span::new(offset, self.offset() - offset);
+        Some(Token::new(span, TokenKind::String(body)))
     }
 }
 

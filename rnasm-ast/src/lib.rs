@@ -312,13 +312,14 @@ pub enum CastStrategy {
     Msb,
 }
 
-impl_convert!(Expression, Surrounded, Integer, Symbol, InfixExpr);
+impl_convert!(Expression, Surrounded, Integer, Symbol, StringExpr, InfixExpr);
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Expression {
     Surrounded(Surrounded),
     Integer(Integer),
     Symbol(Symbol),
+    StringExpr(StringExpr),
     InfixExpr(InfixExpr),
 }
 
@@ -329,6 +330,7 @@ impl Spannable for Expression {
             Surrounded(expr) => expr.span(),
             Integer(expr) => expr.span(),
             Symbol(expr) => expr.span(),
+            StringExpr(expr) => expr.span(),
             InfixExpr(expr) => expr.span(),
         }
     }
@@ -399,6 +401,19 @@ pub struct LocalSymbol {
 }
 
 impl Spannable for LocalSymbol {
+    fn span(&self) -> Span {
+        self.span
+    }
+}
+
+#[derive(new)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct StringExpr {
+    span: Span,
+    pub value: String,
+}
+
+impl Spannable for StringExpr {
     fn span(&self) -> Span {
         self.span
     }
