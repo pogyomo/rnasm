@@ -1,0 +1,11 @@
+[package]
+name = "rnasm-lexer"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+thiserror = "1.0.39"
+nonempty = "0.8.1"
+derive-new = "0.5.9"
+rnasm-span = { path = "../rnasm-span" }
+rnasm-token = { path = "../rnasm-token/" }

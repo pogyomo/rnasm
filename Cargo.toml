@@ -1,0 +1,17 @@
+[package]
+name = "rnasm"
+version = "0.1.0"
+edition = "2021"
+
+[workspace]
+members = [
+    "rnasm-ast",
+    "rnasm-lexer",
+    "rnasm-parser",
+    "rnasm-span",
+    "rnasm-token",
+]
+
+[dependencies]
+rnasm-lexer = { path = "rnasm-lexer" }
+rnasm-parser = { path = "rnasm-parser" }
