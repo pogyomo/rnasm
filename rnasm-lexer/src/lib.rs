@@ -14,6 +14,8 @@ pub enum LexerError {
     UnexpectedCharacter{ span: Span },
     #[error("failed to parse integer: {reason}")]
     FailedToParseInteger{ span: Span, reason: ParseIntError },
+    #[error("string must finish with \"")]
+    MissingQuotationMark{ span: Span },
 }
 
 impl Spannable for LexerError {
@@ -22,6 +24,7 @@ impl Spannable for LexerError {
         match *self {
             UnexpectedCharacter { span } => span,
             FailedToParseInteger { span, .. } => span,
+            MissingQuotationMark { span } => span,
         }
     }
 }
@@ -105,7 +108,10 @@ impl NonEmptyLexer {
         }
 
         if let Some(token) = self.string() {
-            return Some(Ok(token));
+            match token {
+                Ok(token) => return Some(Ok(token)),
+                Err(error) => return Some(Err(error)),
+            }
         }
 
         let offset = self.offset();
@@ -242,7 +248,7 @@ impl NonEmptyLexer {
 
 impl NonEmptyLexer {
     /// Try to create string token. If success, advance position.
-    fn string(&mut self) -> Option<Token> {
+    fn string(&mut self) -> Option<Result<Token, LexerError>> {
         let offset = self.offset();
 
         if !self.consume('"') {
@@ -250,16 +256,31 @@ impl NonEmptyLexer {
         }
 
         let mut body = String::new();
-        while let Some(ch) = self.next() {
-            if ch == '"' {
-                break;
-            } else {
-                body.push(ch);
+        loop {
+            match self.peek() {
+                Some('"') => {
+                    self.next();
+                    break;
+                }
+                Some('\n') => {
+                    return Some(Err(LexerError::MissingQuotationMark {
+                        span: Span::new(offset, self.offset() - offset)
+                    }));
+                }
+                Some(ch) => {
+                    self.next();
+                    body.push(ch)
+                }
+                None => {
+                    return Some(Err(LexerError::MissingQuotationMark {
+                        span: Span::new(offset, self.offset() - offset)
+                    }));
+                }
             }
         }
 
         let span = Span::new(offset, self.offset() - offset);
-        Some(Token::new(span, TokenKind::String(body)))
+        Some(Ok(Token::new(span, TokenKind::String(body))))
     }
 }
 
