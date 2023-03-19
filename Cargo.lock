@@ -68,6 +68,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "rnasm-opcode"
+version = "0.1.0"
+dependencies = [
+ "derive-new",
+ "thiserror",
+]
+
+[[package]]
 name = "rnasm-parser"
 version = "0.1.0"
 dependencies = [

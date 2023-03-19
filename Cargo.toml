@@ -7,6 +7,7 @@ edition = "2021"
 members = [
     "rnasm-ast",
     "rnasm-lexer",
+    "rnasm-opcode",
     "rnasm-parser",
     "rnasm-report",
     "rnasm-span",
