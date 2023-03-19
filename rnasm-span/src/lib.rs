@@ -71,15 +71,15 @@ impl Add for Span {
     /// ```
     fn add(self, rhs: Self) -> Self::Output {
         if self.offset <= rhs.offset {
-            if self.offset + self.len < rhs.offset {
+            if self.offset + self.len < rhs.offset + rhs.len {
                 Self {
                     offset: self.offset,
-                    len: self.len
+                    len: rhs.offset - self.offset + rhs.len
                 }
             } else {
                 Self {
                     offset: self.offset,
-                    len: rhs.offset - self.offset + rhs.len
+                    len: self.len
                 }
             }
         } else {
