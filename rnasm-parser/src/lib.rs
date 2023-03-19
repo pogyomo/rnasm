@@ -28,7 +28,8 @@ use rnasm_ast::{
     LabelStatement, InstStatement, InstName, PseudoInstruction, PseudoOperand,
     ActualOperand, ActualInstruction, Expression, Accumulator, CastStrategy, 
     Immediate, Indirect, IndexableRegister, Zeropage, AbsoluteOrRelative,
-    InfixExpr, InfixOp, Integer, Symbol, LocalSymbol, GlobalSymbol, Surrounded, StringExpr
+    InfixExpr, InfixOp, Integer, Symbol, LocalSymbol, GlobalSymbol, Surrounded,
+    StringExpr
 };
 use rnasm_span::{Span, Spannable};
 use rnasm_token::{Token, TokenKind};
@@ -118,6 +119,18 @@ impl NonEmptyParser {
     fn parse(mut self) -> ParseResult<Option<Statement>> {
         let label = self.parse_label();
         let instruction = self.parse_instruction()?;
+
+        // If token exist, the statement is invalid.
+        if let Some(token) = self.next() {
+            let mut stack = TokenStack::new(token);
+            while let Some(token) = self.next() {
+                stack.push(token);
+            }
+            return Err(ParserError::UnexpectedTokenFound {
+                span: stack.span(),
+                expect: "no token"
+            })
+        }
 
         match (label, instruction) {
             (Some(label), Some(instruction)) => {
