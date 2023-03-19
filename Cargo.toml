@@ -8,6 +8,7 @@ members = [
     "rnasm-ast",
     "rnasm-lexer",
     "rnasm-parser",
+    "rnasm-report",
     "rnasm-span",
     "rnasm-token",
 ]
@@ -15,3 +16,5 @@ members = [
 [dependencies]
 rnasm-lexer = { path = "rnasm-lexer" }
 rnasm-parser = { path = "rnasm-parser" }
+rnasm-report = { path = "rnasm-report" }
+rnasm-span = { path = "rnasm-span" }
