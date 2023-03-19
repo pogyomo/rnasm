@@ -11,14 +11,27 @@ pub fn report(input: &str, span: Span, name: &str, what: &str, msg: &str) {
         .collect::<Vec<_>>();
     if start.0 == end.0 {
         let line = lines[start.0 - 1];
-
         let linenum   = " ".repeat(start.0.to_string().width());
         let padding   = " ".repeat(line[..start.1].width());
         let indicator = "^".repeat(line[start.1..end.1].width());
-
-        eprintln!("[error] at {}: {}", name, what);
+        eprintln!("[error] {} at {}", what, name);
         eprintln!("{} | {}", start.0, line);
         eprintln!("{}   {}{} {}", linenum, padding, indicator, msg);
+    } else {
+        eprintln!("[error] {} at {}", what, name);
+
+        let line = lines[start.0 - 1];
+        let linenum   = " ".repeat(end.0.to_string().width());
+        let padding   = " ".repeat(line[..start.1].width());
+        let indicator = "^".repeat(line[start.1..].width());
+        eprintln!("{} | {}", start.0, line);
+        eprintln!("{} : {}{}", linenum, padding, indicator);
+
+        let line = lines[end.0 - 1];
+        let linenum   = " ".repeat(end.0.to_string().width());
+        let indicator = "^".repeat(line[..end.1].width());
+        eprintln!("{} | {}", end.0, line);
+        eprintln!("{}   {} {}", linenum, indicator, msg);
     }
 }
 
