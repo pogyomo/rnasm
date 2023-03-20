@@ -41,6 +41,7 @@ dependencies = [
 name = "rnasm"
 version = "0.1.0"
 dependencies = [
+ "rnasm-codegen",
  "rnasm-lexer",
  "rnasm-parser",
  "rnasm-report",
@@ -54,6 +55,17 @@ dependencies = [
  "derive-new",
  "nonempty",
  "rnasm-span",
+]
+
+[[package]]
+name = "rnasm-codegen"
+version = "0.1.0"
+dependencies = [
+ "derive-new",
+ "rnasm-ast",
+ "rnasm-opcode",
+ "rnasm-span",
+ "thiserror",
 ]
 
 [[package]]

@@ -1,4 +1,5 @@
 use std::{env::args, fs::File, io::Read};
+use rnasm_codegen::CodeGen;
 use rnasm_lexer::Lexer;
 use rnasm_parser::Parser;
 use rnasm_report::report;
@@ -47,5 +48,26 @@ fn main() {
             return;
         }
     };
-    println!("{:#?}", stmts);
+
+    let codegen = CodeGen::new();
+    let codes = match codegen.gen(stmts) {
+        Ok(codes) => codes,
+        Err(e) => {
+            report(
+                &input,
+                e.span(),
+                &args[1],
+                "while generating",
+                &e.to_string()
+            );
+            return;
+        }
+    };
+    for code in codes.iter() {
+        print!("${:04X}", code.0);
+        for byte in code.1.iter() {
+            print!(" {:02X}", byte);
+        }
+        println!();
+    }
 }

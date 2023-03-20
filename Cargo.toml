@@ -6,6 +6,7 @@ edition = "2021"
 [workspace]
 members = [
     "rnasm-ast",
+    "rnasm-codegen",
     "rnasm-lexer",
     "rnasm-opcode",
     "rnasm-parser",
@@ -15,6 +16,7 @@ members = [
 ]
 
 [dependencies]
+rnasm-codegen = { path = "rnasm-codegen" }
 rnasm-lexer = { path = "rnasm-lexer" }
 rnasm-parser = { path = "rnasm-parser" }
 rnasm-report = { path = "rnasm-report" }
