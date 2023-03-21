@@ -72,6 +72,7 @@ version = "0.1.0"
 dependencies = [
  "derive-new",
  "rnasm-ast",
+ "rnasm-builder",
  "rnasm-opcode",
  "rnasm-span",
  "thiserror",

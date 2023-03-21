@@ -9,5 +9,6 @@ edition = "2021"
 derive-new = "0.5.9"
 thiserror = "1.0.40"
 rnasm-ast = { path = "../rnasm-ast" }
+rnasm-builder = { path = "../rnasm-builder" }
 rnasm-opcode = { path = "../rnasm-opcode" }
 rnasm-span = { path = "../rnasm-span" }

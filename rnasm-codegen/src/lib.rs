@@ -1,10 +1,11 @@
 use derive_new::new;
 use thiserror::Error;
-use std::rc::Rc;
+use std::{rc::Rc, collections::HashMap};
 use rnasm_ast::{
     Statement, Instruction, Label, PseudoInstruction, ActualInstruction,
     GlobalLabel, LocalLabel, Expression, InfixOp, CastStrategy
 };
+use rnasm_builder::HeaderMirror;
 use rnasm_opcode::{Mnemonic, Opcode, OpcodeByteLen};
 use rnasm_span::{Span, Spannable};
 use object::{StringObj, IntegerObj, Object};
@@ -33,6 +34,8 @@ pub enum CodeGenError {
     InvalidNumberOfArguments { span: Span, expect: usize, got: usize },
     #[error("invalid type of arguemnt: expect {expect}")]
     InvalidTypeOfArgument { span: Span, expect: &'static str },
+    #[error("invalid value of arguemnt: expect {expect}")]
+    InvalidValueOfArgument { span: Span, expect: &'static str },
     #[error("invalid infix operation: {reason}")]
     InvalidInfixOperation { span: Span, reason: &'static str },
     #[error("relative can't indexing with register")]
@@ -53,11 +56,23 @@ impl Spannable for CodeGenError {
             CannotDefineLocalLabel { span } => span,
             InvalidNumberOfArguments { span, .. } => span,
             InvalidTypeOfArgument { span, .. } => span,
+            InvalidValueOfArgument { span, .. } => span,
             InvalidInfixOperation { span, .. } => span,
             RelativeCantIndexing { span } => span,
             RelativeExceedRange { span } => span,
         }
     }
+}
+
+/// A generated code.
+#[derive(new)]
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
+pub struct GeneratedCode {
+    pub prgs: HashMap<u16, Vec<(u16, Vec<u8>)>>,
+    pub chrs: HashMap<u16, Vec<(u16, Vec<u8>)>>,
+    pub mapper: u16,
+    pub submapper: u8,
+    pub mirror: HeaderMirror,
 }
 
 /// A set of infomation which is required while generating code.
@@ -72,8 +87,15 @@ pub struct CodeGenInfo {
     address: u16,
     #[new(value = "None")]
     curr_label: Option<String>,
+    #[new(value = "0")]
+    curr_prg_bank: u16,
+    #[new(value = "0")]
+    curr_chr_bank: u16,
+    #[new(value = "true")]
+    curr_is_prg: bool, // True if newly used .bank accept "prg"
 }
 
+/// A struct which generate prg and chr codes from given statements.
 #[derive(new)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CodeGen {
@@ -82,15 +104,24 @@ pub struct CodeGen {
 
     #[new(default)]
     symtable: SymbolTable,
+
     #[new(default)]
-    codes: Vec<(u16, Vec<u8>)>, // Generated codes
+    prgs: HashMap<u16, Vec<(u16, Vec<u8>)>>, // Generated code for each bank.
+    #[new(default)]
+    chrs: HashMap<u16, Vec<(u16, Vec<u8>)>>, // Generated code for each bank.
+    #[new(value = "0")]
+    mapper: u16,
+    #[new(value = "0")]
+    submapper: u8,
+    #[new(default)]
+    mirror: HeaderMirror,
 }
 
 impl CodeGen {
     pub fn gen(
         mut self,
         stmts: Vec<Statement>
-    ) -> Result<Vec<(u16, Vec<u8>)>, CodeGenError> {
+    ) -> Result<GeneratedCode, CodeGenError> {
         self.info = CodeGenInfo::new(true);
         for stmt in stmts.iter() {
             self.statement(stmt)?;
@@ -99,7 +130,9 @@ impl CodeGen {
         for stmt in stmts.iter() {
             self.statement(stmt)?;
         }
-        Ok(self.codes)
+        Ok(GeneratedCode::new(
+            self.prgs, self.chrs, self.mapper, self.submapper, self.mirror
+        ))
     }
 }
 
@@ -138,6 +171,10 @@ impl CodeGen {
             "org" => self.org(pseudo),
             "db" => self.db(pseudo),
             "dw" => self.dw(pseudo),
+            "bank" => self.bank(pseudo),
+            "inesmap" => self.inesmap(pseudo),
+            "inessmap" => self.inessmap(pseudo),
+            "inesmir" => self.inesmir(pseudo),
             _ => Err(CodeGenError::InvalidPseudoName {
                 span: pseudo.name.span()
             })
@@ -325,13 +362,172 @@ impl CodeGen {
         }
         Ok(())
     }
+
+    /// Change current bank.
+    ///
+    /// The bank number correspond to the place which the generated code placed.
+    fn bank(&mut self, pseudo: &PseudoInstruction) -> Result<(), CodeGenError> {
+        let Some(ref operand) = pseudo.operand else {
+            return Err(CodeGenError::InvalidNumberOfArguments {
+                span: pseudo.span(),
+                expect: 2,
+                got: 0
+            })
+        };
+        if operand.args.len() != 2 {
+            return Err(CodeGenError::InvalidNumberOfArguments {
+                span: pseudo.span(),
+                expect: 2,
+                got: operand.args.len()
+            })
+        }
+
+        let name = match &*self.eval(operand.args.first())? {
+            Object::StringObj(str) => str.value.clone(),
+            _ => return Err(CodeGenError::InvalidTypeOfArgument {
+                span: operand.args.first().span(),
+                expect: "string"
+            })
+        };
+        let value = match *self.eval(&operand.args[1])? {
+            Object::IntegerObj(value) => value.value,
+            _ => return Err(CodeGenError::InvalidTypeOfArgument {
+                span: operand.args.first().span(),
+                expect: "integer"
+            })
+        };
+        match name.as_str() {
+            "prg" => {
+                self.info.curr_prg_bank = value;
+                self.info.curr_is_prg = true;
+            }
+            "chr" => {
+                self.info.curr_chr_bank = value;
+                self.info.curr_is_prg = false;
+            }
+            _ => return Err(CodeGenError::InvalidValueOfArgument {
+                span: operand.args.first().span(),
+                expect: "prg or chr"
+            })
+        }
+        Ok(())
+    }
+
+    fn inesmap(&mut self, pseudo: &PseudoInstruction) -> Result<(), CodeGenError> {
+        let Some(ref operand) = pseudo.operand else {
+            return Err(CodeGenError::InvalidNumberOfArguments {
+                span: pseudo.span(),
+                expect: 1,
+                got: 0
+            })
+        };
+        if operand.args.len() != 1 {
+            return Err(CodeGenError::InvalidNumberOfArguments {
+                span: pseudo.span(),
+                expect: 1,
+                got: operand.args.len()
+            })
+        }
+
+        let value = match *self.eval(operand.args.first())? {
+            Object::IntegerObj(int) => int.value,
+            _ => return Err(CodeGenError::InvalidTypeOfArgument {
+                span: operand.args.first().span(),
+                expect: "integer"
+            })
+        };
+        self.mapper = value;
+        Ok(())
+    }
+
+    fn inessmap(&mut self, pseudo: &PseudoInstruction) -> Result<(), CodeGenError> {
+        let Some(ref operand) = pseudo.operand else {
+            return Err(CodeGenError::InvalidNumberOfArguments {
+                span: pseudo.span(),
+                expect: 1,
+                got: 0
+            })
+        };
+        if operand.args.len() != 1 {
+            return Err(CodeGenError::InvalidNumberOfArguments {
+                span: pseudo.span(),
+                expect: 1,
+                got: operand.args.len()
+            })
+        }
+
+        let value = match *self.eval(operand.args.first())? {
+            Object::IntegerObj(int) => int.value,
+            _ => return Err(CodeGenError::InvalidTypeOfArgument {
+                span: operand.args.first().span(),
+                expect: "integer"
+            })
+        };
+        self.submapper = value as u8;
+        Ok(())
+    }
+
+    fn inesmir(&mut self, pseudo: &PseudoInstruction) -> Result<(), CodeGenError> {
+        let Some(ref operand) = pseudo.operand else {
+            return Err(CodeGenError::InvalidNumberOfArguments {
+                span: pseudo.span(),
+                expect: 1,
+                got: 0
+            })
+        };
+        if operand.args.len() != 1 {
+            return Err(CodeGenError::InvalidNumberOfArguments {
+                span: pseudo.span(),
+                expect: 1,
+                got: operand.args.len()
+            })
+        }
+
+        let value = match *self.eval(operand.args.first())? {
+            Object::IntegerObj(int) => int.value,
+            _ => return Err(CodeGenError::InvalidTypeOfArgument {
+                span: operand.args.first().span(),
+                expect: "integer"
+            })
+        };
+        self.mirror = match value {
+            0 => HeaderMirror::HorizontalOrMapperControlled,
+            1 => HeaderMirror::Vertical,
+            2 => HeaderMirror::ForuScreen,
+            _ => return Err(CodeGenError::InvalidValueOfArgument {
+                span: operand.args.first().span(),
+                expect: "0, 1 or 2"
+            })
+        };
+        Ok(())
+    }
 }
 
 impl CodeGen {
     /// Write bytes to current address then advance the address.
     fn write(&mut self, bytes: Vec<u8>) -> Result<(), CodeGenError> {
         let len = bytes.len();
-        self.codes.push((self.info.address, bytes));
+        if self.info.curr_is_prg {
+            match self.prgs.get_mut(&self.info.curr_prg_bank) {
+                Some(vec) => vec.push((self.info.address, bytes)),
+                None => {
+                    self.prgs.insert(
+                        self.info.curr_prg_bank,
+                        vec![(self.info.address, bytes)]
+                    );
+                }
+            }
+        } else {
+            match self.chrs.get_mut(&self.info.curr_chr_bank) {
+                Some(vec) => vec.push((self.info.address, bytes)),
+                None => {
+                    self.chrs.insert(
+                        self.info.curr_chr_bank,
+                        vec![(self.info.address, bytes)]
+                    );
+                }
+            }
+        }
         self.info.address = self.info.address.wrapping_add(len as u16);
         Ok(())
     }
