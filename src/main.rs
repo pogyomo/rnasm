@@ -1,4 +1,4 @@
-use std::{env::args, fs::File, io::{Read, Write}, collections::HashMap};
+use std::{env::args, fs::File, io::{Read, Write}, collections::HashMap, path::Path};
 use rnasm_builder::{Builder, HeaderMirror};
 use rnasm_codegen::CodeGen;
 use rnasm_lexer::Lexer;
@@ -48,9 +48,23 @@ fn main() {
         return;
     }
 
-    let mut file = File::open(&args[1]).unwrap();
+    let mut file = match File::open(&args[1]) {
+        Ok(file) => file,
+        Err(e) => {
+            eprintln!("failed to open file: {}", e);
+            eprintln!("abort");
+            return;
+        }
+    };
     let mut input = String::new();
-    file.read_to_string(&mut input).unwrap();
+    match file.read_to_string(&mut input) {
+        Ok(_) => (),
+        Err(e) => {
+            eprintln!("failed to read file: {}", e);
+            eprintln!("abort");
+            return;
+        }
+    };
 
     let lexer = Lexer::new(input.clone());
     let tokens = match lexer.lex() {
@@ -116,6 +130,20 @@ fn main() {
         }
     };
 
-    let mut file = File::create("a.nes").unwrap();
-    file.write_all(&rom).unwrap();
+    let mut file = match File::create("a.nes") {
+        Ok(file) => file,
+        Err(e) => {
+            eprintln!("failed to create output file: {}", e);
+            eprintln!("abort");
+            return;
+        }
+    };
+    match file.write_all(&rom) {
+        Ok(_) => (),
+        Err(e) => {
+            eprintln!("failed to write output: {}", e);
+            eprintln!("abort");
+            return;
+        }
+    };
 }
