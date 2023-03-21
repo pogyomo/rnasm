@@ -65,8 +65,6 @@ fn main() {
         }
     };
 
-    println!("{:#?}", &codes);
-
     let builder = Builder::new(codes);
     let rom = match builder.build() {
         Ok(rom) => rom,

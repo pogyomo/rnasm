@@ -317,7 +317,6 @@ impl CodeGen {
                             expect: "integer"
                         })
                     };
-                    println!("{}", value);
                     self.write(value.to_le_bytes().to_vec())?;
                 } else {
                     self.info.address = self.info.address.wrapping_add(2);
