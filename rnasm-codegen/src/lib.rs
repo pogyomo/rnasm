@@ -136,6 +136,8 @@ impl CodeGen {
     fn pseudo(&mut self, pseudo: &PseudoInstruction) -> Result<(), CodeGenError> {
         match pseudo.name.name.as_str() {
             "org" => self.org(pseudo),
+            "db" => self.db(pseudo),
+            "dw" => self.dw(pseudo),
             _ => Err(CodeGenError::InvalidPseudoName {
                 span: pseudo.name.span()
             })
@@ -212,7 +214,7 @@ impl CodeGen {
             }
         } else {
             let len = <OpcodeByteLen as Into<u16>>::into(opcode.to_byte_len());
-            self.info.address += len;
+            self.info.address = self.info.address.wrapping_add(len);
         }
         Ok(())
     }
@@ -283,17 +285,55 @@ impl CodeGen {
         };
         Ok(())
     }
+
+    fn db(&mut self, pseudo: &PseudoInstruction) -> Result<(), CodeGenError> {
+        if let Some(ref operand) = pseudo.operand {
+            for arg in operand.args.iter() {
+                if !self.info.is_pass1 {
+                    let value = match *self.eval(arg)? {
+                        Object::IntegerObj(int) => int.value,
+                        _ => return Err(CodeGenError::InvalidTypeOfArgument {
+                            span: arg.span(),
+                            expect: "integer"
+                        })
+                    };
+                    self.write(vec![value.to_le_bytes()[0]])?;
+                } else {
+                    self.info.address = self.info.address.wrapping_add(1);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn dw(&mut self, pseudo: &PseudoInstruction) -> Result<(), CodeGenError> {
+        if let Some(ref operand) = pseudo.operand {
+            for arg in operand.args.iter() {
+                if !self.info.is_pass1 {
+                    let value = match *self.eval(arg)? {
+                        Object::IntegerObj(int) => int.value,
+                        _ => return Err(CodeGenError::InvalidTypeOfArgument {
+                            span: arg.span(),
+                            expect: "integer"
+                        })
+                    };
+                    println!("{}", value);
+                    self.write(value.to_le_bytes().to_vec())?;
+                } else {
+                    self.info.address = self.info.address.wrapping_add(2);
+                }
+            }
+        }
+        Ok(())
+    }
 }
 
 impl CodeGen {
     /// Write bytes to current address then advance the address.
-    /// If it is pass1, only advance address.
     fn write(&mut self, bytes: Vec<u8>) -> Result<(), CodeGenError> {
         let len = bytes.len();
-        if !self.info.is_pass1 && bytes.len() != 0 {
-            self.codes.push((self.info.address, bytes));
-        }
-        self.info.address += len as u16;
+        self.codes.push((self.info.address, bytes));
+        self.info.address = self.info.address.wrapping_add(len as u16);
         Ok(())
     }
 }

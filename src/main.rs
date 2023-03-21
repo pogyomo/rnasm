@@ -1,4 +1,5 @@
-use std::{env::args, fs::File, io::Read};
+use std::{env::args, fs::File, io::{Read, Write}};
+use rnasm_builder::Builder;
 use rnasm_codegen::CodeGen;
 use rnasm_lexer::Lexer;
 use rnasm_parser::Parser;
@@ -63,11 +64,18 @@ fn main() {
             return;
         }
     };
-    for code in codes.iter() {
-        print!("${:04X}", code.0);
-        for byte in code.1.iter() {
-            print!(" {:02X}", byte);
+
+    println!("{:#?}", &codes);
+
+    let builder = Builder::new(codes);
+    let rom = match builder.build() {
+        Ok(rom) => rom,
+        Err(e) => {
+            println!("{}", e);
+            return;
         }
-        println!();
-    }
+    };
+
+    let mut file = File::create("a.nes").unwrap();
+    file.write_all(&rom).unwrap();
 }
