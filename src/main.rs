@@ -1,5 +1,5 @@
-use std::{env::args, fs::File, io::{Read, Write}, collections::HashMap, path::Path};
-use rnasm_builder::{Builder, HeaderMirror};
+use std::{env::args, fs::File, io::{Read, Write}, collections::HashMap};
+use rnasm_builder::Builder;
 use rnasm_codegen::CodeGen;
 use rnasm_lexer::Lexer;
 use rnasm_parser::Parser;

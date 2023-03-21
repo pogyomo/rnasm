@@ -68,24 +68,23 @@ impl Builder {
             let mut bytes = vec![0; 0x4000];
             for (address, byte) in prg.iter() {
                 let (address, byte) = (*address, *byte);
-                if !check.insert(address) {
-                    return Err(BuilderError::ByteAlreadyExistOnPrgRom {
-                        address, byte
-                    })
-                }
                 if address < 0x8000 {
                     return Err(BuilderError::IncorrectPrgRomAddress {
                         address
                     })
-                } else {
-                    // We need convert given address into 0-based address.
-                    let address = if address >= 0xC000 {
-                        address - 0xC000
-                    } else {
-                        address - 0x8000
-                    };
-                    bytes[address as usize] = byte;
                 }
+                // We need convert given address into 0-based address.
+                let addr = if address >= 0xC000 {
+                    address - 0xC000
+                } else {
+                    address - 0x8000
+                };
+                if !check.insert(addr) {
+                    return Err(BuilderError::ByteAlreadyExistOnPrgRom {
+                        address, byte
+                    })
+                }
+                bytes[addr as usize] = byte;
             }
             rom.append(&mut bytes);
         }
