@@ -1,6 +1,6 @@
 use derive_new::new;
 use thiserror::Error;
-use std::{rc::Rc, collections::HashMap};
+use std::{rc::Rc, collections::HashMap, fs::File, io::Read};
 use rnasm_ast::{
     Statement, Instruction, Label, PseudoInstruction, ActualInstruction,
     GlobalLabel, LocalLabel, Expression, InfixOp, CastStrategy
@@ -16,7 +16,7 @@ mod object;
 mod opcode;
 mod symtable;
 
-#[derive(Debug, Error, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Error)]
 pub enum CodeGenError {
     #[error("invalid pseudo instruction name")]
     InvalidPseudoName { span: Span },
@@ -42,6 +42,12 @@ pub enum CodeGenError {
     RelativeCantIndexing { span: Span },
     #[error("relative exceed range: must be from -128 to 127")]
     RelativeExceedRange { span: Span },
+    #[error("failed to open file: {reason}")]
+    FailedToOpneFile { span: Span, reason: std::io::Error },
+    #[error("failed to read file: {reason}")]
+    FailedToReadFile { span: Span, reason: std::io::Error },
+    #[error("file too big to use")]
+    FileTooBig { span: Span },
 }
 
 impl Spannable for CodeGenError {
@@ -60,6 +66,9 @@ impl Spannable for CodeGenError {
             InvalidInfixOperation { span, .. } => span,
             RelativeCantIndexing { span } => span,
             RelativeExceedRange { span } => span,
+            FailedToOpneFile { span, .. } => span,
+            FailedToReadFile { span, .. } => span,
+            FileTooBig { span } => span,
         }
     }
 }
@@ -175,6 +184,7 @@ impl CodeGen {
             "inesmap" => self.inesmap(pseudo),
             "inessmap" => self.inessmap(pseudo),
             "inesmir" => self.inesmir(pseudo),
+            "incbin" => self.incbin(pseudo),
             _ => Err(CodeGenError::InvalidPseudoName {
                 span: pseudo.name.span()
             })
@@ -499,6 +509,59 @@ impl CodeGen {
                 expect: "0, 1 or 2"
             })
         };
+        Ok(())
+    }
+
+    fn incbin(&mut self, pseudo: &PseudoInstruction) -> Result<(), CodeGenError> {
+        let Some(ref operand) = pseudo.operand else {
+            return Err(CodeGenError::InvalidNumberOfArguments {
+                span: pseudo.span(),
+                expect: 1,
+                got: 0
+            })
+        };
+        if operand.args.len() != 1 {
+            return Err(CodeGenError::InvalidNumberOfArguments {
+                span: pseudo.span(),
+                expect: 1,
+                got: operand.args.len()
+            })
+        }
+
+        let name = match *self.eval(operand.args.first())? {
+            Object::StringObj(ref str) => str.value.clone(),
+            _ => return Err(CodeGenError::InvalidTypeOfArgument {
+                span: operand.args.first().span(),
+                expect: "string"
+            })
+        };
+        let mut file = match File::open(name) {
+            Ok(file) => file,
+            Err(e) => return Err(CodeGenError::FailedToOpneFile {
+                span: operand.args.first().span(),
+                reason: e
+            })
+        };
+        let mut bytes = Vec::new();
+        match file.read_to_end(&mut bytes) {
+            Ok(_) => (),
+            Err(e) => return Err(CodeGenError::FailedToReadFile {
+                span: operand.args.first().span(),
+                reason: e
+            })
+        }
+        let len = if bytes.len() > 0xFFFF {
+            return Err(CodeGenError::FileTooBig {
+                span: operand.args.first().span()
+            })
+        } else {
+            bytes.len() as u16
+        };
+        if !self.info.is_pass1 {
+            self.write(bytes)?;
+        } else {
+            self.info.address = self.info.address.wrapping_add(len);
+        }
         Ok(())
     }
 }
