@@ -185,6 +185,7 @@ impl CodeGen {
             "inessmap" => self.inessmap(pseudo),
             "inesmir" => self.inesmir(pseudo),
             "incbin" => self.incbin(pseudo),
+            "equ" => self.equ(pseudo),
             _ => Err(CodeGenError::InvalidPseudoName {
                 span: pseudo.name.span()
             })
@@ -270,7 +271,7 @@ impl CodeGen {
         if self.info.is_pass1 {
             if self.symtable.add(
                 label.name.clone(),
-                IntegerObj::new(self.info.address).into()
+                Rc::new(IntegerObj::new(self.info.address).into())
             ) {
                 return Err(CodeGenError::SymbolAlreadyExist {
                     span: label.span()
@@ -295,7 +296,7 @@ impl CodeGen {
             };
             if symbol.borrow_mut().add(
                 label.name.clone(),
-                IntegerObj::new(self.info.address).into()
+                Rc::new(IntegerObj::new(self.info.address).into())
             ) {
                 return Err(CodeGenError::SymbolAlreadyExist {
                     span: label.span()
@@ -561,6 +562,48 @@ impl CodeGen {
             self.write(bytes)?;
         } else {
             self.info.address = self.info.address.wrapping_add(len);
+        }
+        Ok(())
+    }
+
+    fn equ(&mut self, pseudo: &PseudoInstruction) -> Result<(), CodeGenError> {
+        let Some(ref operand) = pseudo.operand else {
+            return Err(CodeGenError::InvalidNumberOfArguments {
+                span: pseudo.span(),
+                expect: 2,
+                got: 0
+            })
+        };
+        if operand.args.len() != 2 {
+            return Err(CodeGenError::InvalidNumberOfArguments {
+                span: pseudo.span(),
+                expect: 2,
+                got: operand.args.len()
+            })
+        }
+
+        if self.info.is_pass1 {
+            let name = match operand.args.first() {
+                Expression::Symbol(symbol) => match symbol {
+                    rnasm_ast::Symbol::GlobalSymbol(symbol) => {
+                        symbol.name.clone()
+                    }
+                    _ => return Err(CodeGenError::InvalidTypeOfArgument {
+                        span: operand.args.first().span(),
+                        expect: "global symbol"
+                    })
+                }
+                _ => return Err(CodeGenError::InvalidTypeOfArgument {
+                    span: operand.args.first().span(),
+                    expect: "global symbol"
+                })
+            };
+            let value = self.eval(&operand.args[1])?;
+            if self.symtable.add(name, value) {
+                return Err(CodeGenError::SymbolAlreadyExist {
+                    span: operand.args.first().span()
+                })
+            };
         }
         Ok(())
     }

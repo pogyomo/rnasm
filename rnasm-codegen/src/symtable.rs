@@ -14,8 +14,8 @@ pub struct SymbolTable {
 impl SymbolTable {
     /// Add symbol to symbol table with value. If the symbol already
     /// exist, return true.
-    pub fn add(&mut self, name: String, value: Object) -> bool {
-        let symbol = Symbol::new(Rc::new(value));
+    pub fn add(&mut self, name: String, value: Rc<Object>) -> bool {
+        let symbol = Symbol::new(value);
         self.table.insert(name, Rc::new(RefCell::new(symbol))).is_some()
     } 
 
@@ -36,8 +36,8 @@ pub struct Symbol {
 impl Symbol {
     /// Add child to this symbol with value. If the child already
     /// exist, return true.
-    pub fn add(&mut self, name: String, value: Object) -> bool {
-        self.childs.insert(name, Rc::new(value)).is_some()
+    pub fn add(&mut self, name: String, value: Rc<Object>) -> bool {
+        self.childs.insert(name, value).is_some()
     }
 
     /// Get the child's value.
