@@ -256,14 +256,8 @@ impl NonEmptyParser {
 
         let head = self.parse_expression()?;
         let mut tail = Vec::new();
-        while let Some(token) = self.peek() {
-            match token.kind() {
-                TokenKind::Comma => {
-                    self.next();
-                    tail.push(self.parse_expression()?);
-                }
-                _ => break,
-            }
+        while !self.is_eol() {
+            tail.push(self.parse_expression()?);
         }
         Ok(Some(PseudoOperand::new(head, tail)))
     }
