@@ -1,10 +1,22 @@
-use std::{env::args, fs::File, io::{Read, Write}, collections::HashMap};
+use clap::Parser as ClapParser;
+use std::{fs::File, io::{Read, Write}, collections::HashMap};
 use rnasm_builder::Builder;
 use rnasm_codegen::CodeGen;
 use rnasm_lexer::Lexer;
 use rnasm_parser::Parser;
 use rnasm_report::report;
 use rnasm_span::Spannable;
+
+#[derive(Debug, ClapParser)]
+#[command(version, long_about = None)]
+#[command(author = "pogyomo")]
+#[command(about = "A hobby nes assembler written with rust")]
+pub struct Args {
+    #[arg(value_name = "FILE", help = "input file name")]
+    input: String,
+    #[arg(short, value_name = "OUTPUT", help = "output file name")]
+    output: Option<String>,
+}
 
 /// Convert bank-code associated data into vector where
 /// * `code.get(i) == Some(...) => vec.get(i) = Some(...)`
@@ -42,13 +54,9 @@ fn convert_banked_code(
 }
 
 fn main() {
-    let args = args().collect::<Vec<_>>();
-    if args.len() != 2 {
-        eprintln!("abort");
-        return;
-    }
+    let args = Args::parse();
 
-    let mut file = match File::open(&args[1]) {
+    let mut file = match File::open(&args.input) {
         Ok(file) => file,
         Err(e) => {
             eprintln!("failed to open file: {}", e);
@@ -74,7 +82,7 @@ fn main() {
                 report(
                     &input,
                     e.span(),
-                    &args[1],
+                    &args.input,
                     "while lexing",
                     &e.to_string()
                 );
@@ -90,7 +98,7 @@ fn main() {
                 report(
                     &input,
                     e.span(),
-                    &args[1],
+                    &args.input,
                     "while parsing",
                     &e.to_string()
                 );
@@ -106,7 +114,7 @@ fn main() {
             report(
                 &input,
                 e.span(),
-                &args[1],
+                &args.input,
                 "while generating",
                 &e.to_string()
             );
@@ -130,7 +138,11 @@ fn main() {
         }
     };
 
-    let mut file = match File::create("a.nes") {
+    let output = match args.output {
+        Some(output) => output,
+        None => "a.nes".to_string(),
+    };
+    let mut file = match File::create(output) {
         Ok(file) => file,
         Err(e) => {
             eprintln!("failed to create output file: {}", e);

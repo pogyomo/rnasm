@@ -17,6 +17,7 @@ members = [
 ]
 
 [dependencies]
+clap = { version = "4.1.11", features = ["derive"] }
 rnasm-builder = { path = "rnasm-builder" }
 rnasm-codegen = { path = "rnasm-codegen" }
 rnasm-lexer = { path = "rnasm-lexer" }
