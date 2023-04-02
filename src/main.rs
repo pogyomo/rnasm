@@ -10,7 +10,7 @@ use rnasm_span::Spannable;
 #[derive(Debug, ClapParser)]
 #[command(version, long_about = None)]
 #[command(author = "pogyomo")]
-#[command(about = "A hobby nes assembler written with rust")]
+#[command(about = "A hobby nes assembler written in rust")]
 pub struct Args {
     #[arg(value_name = "FILE", help = "input file name")]
     input: String,
