@@ -23,9 +23,7 @@ pub struct Args {
 /// * `code.get(i) == None => vec.get(i) = Some(BankData { data: vec![], .. })`
 ///
 /// If given hashmap is empty, returned vector is also empty.
-fn convert_banked_code(
-    mut codes: HashMap<u16, BankData>
-) -> Vec<BankData> {
+fn convert_banked_code(mut codes: HashMap<u16, BankData>) -> Vec<BankData> {
     let key_max = match codes.keys().into_iter().max() {
         Some(max) => *max,
         None => return Vec::new(),
@@ -78,6 +76,7 @@ fn main() {
             return;
         }
     };
+
     let parser = Parser::new(tokens);
     let stmts = match parser.parse() {
         Ok(stmts) => stmts,
