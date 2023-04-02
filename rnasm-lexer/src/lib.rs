@@ -88,9 +88,11 @@ impl NonEmptyLexer {
         // Skip comment
         if let Some(ch) = self.peek() {
             if ch == ';' {
-                while let Some(ch) = self.next() {
+                while let Some(ch) = self.peek() {
                     if ch == '\n' {
                         break;
+                    } else {
+                        self.next();
                     }
                 }
             }
