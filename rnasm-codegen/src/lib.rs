@@ -5,7 +5,7 @@ use rnasm_ast::{
     Statement, Instruction, Label, PseudoInstruction, ActualInstruction,
     GlobalLabel, LocalLabel, Expression, InfixOp, CastStrategy
 };
-use rnasm_opcode::{Mnemonic, Opcode, OpcodeByteLen};
+use rnasm_opcode::{Mnemonic, Opcode, OpcodeByteLen, AddrMode};
 use rnasm_span::{Span, Spannable};
 use object::{StringObj, IntegerObj, Object};
 use opcode::{operand_to_addrmode, operand_to_cast, operand_to_expr};
@@ -51,6 +51,8 @@ pub enum CodeGenError {
     AddressIsSmall { span: Span, address: u16 },
     #[error("need .pbank or .cbank before this")]
     NeedBankSwitch { span: Span },
+    #[error("indirect can't use < or > to its expression")]
+    IndirectCantUseCast { span: Span },
 }
 
 impl Spannable for CodeGenError {
@@ -74,6 +76,7 @@ impl Spannable for CodeGenError {
             FileTooBig { span } => span,
             AddressIsSmall { span, .. } => span,
             NeedBankSwitch { span } => span,
+            IndirectCantUseCast { span } => span,
         }
     }
 }
@@ -220,8 +223,17 @@ impl CodeGen {
         let opcode = Opcode::new(mnemonic, addrmode);
 
         if !self.info.is_pass1 {
-            let cast = operand_to_cast(actual.operand.as_ref())
-                .unwrap_or(CastStrategy::Lsb);
+            let cast = match operand_to_cast(actual.operand.as_ref()) {
+                Some(_) if matches!(addrmode, AddrMode::Indirect) => {
+                    // If the statement is like jmp [<expr] or jmp [>expr],
+                    // this is invalid.
+                    return Err(CodeGenError::IndirectCantUseCast {
+                        span: actual.span()
+                    })
+                }
+                Some(cast) => cast,
+                None => CastStrategy::Lsb,
+            };
             let value = match operand_to_expr(actual.operand.as_ref()) {
                 Some(expr) =>  match *self.eval(expr)? {
                     Object::IntegerObj(int) => int.value,

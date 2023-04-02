@@ -274,7 +274,7 @@ impl Spannable for Immediate {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Indirect {
     span: Span,
-    pub cast: CastStrategy,
+    pub cast: Option<CastStrategy>,
     pub expr: Expression,
     pub register: Option<IndexableRegister>,
 }

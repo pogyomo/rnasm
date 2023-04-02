@@ -335,15 +335,15 @@ impl NonEmptyParser {
         let cast = match stack.last().kind() {
             TokenKind::LT => {
                 self.next();
-                CastStrategy::Lsb
+                Some(CastStrategy::Lsb)
             }
             TokenKind::GT => {
                 self.next();
-                CastStrategy::Msb
+                Some(CastStrategy::Msb)
             }
             _ => {
                 stack.pop();
-                CastStrategy::Lsb
+                None
             }
         };
 

@@ -49,7 +49,7 @@ pub fn operand_to_cast(operand: Option<&ActualOperand>) -> Option<CastStrategy> 
         use ActualOperand::*;
         match operand {
             Immediate(imm) => Some(imm.cast),
-            Indirect(ind) => Some(ind.cast),
+            Indirect(ind) => Some(ind.cast?),
             Zeropage(zpg) => Some(zpg.cast),
             _ => None,
         }
