@@ -81,11 +81,16 @@ impl Spannable for CodeGenError {
 /// A generated code.
 #[derive(new)]
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
-pub struct GeneratedCode {
-    pub prgs: HashMap<u16, BankData>, // Bank-program pairs
-    pub chrs: HashMap<u16, BankData>, // Bank-character pairs
+pub struct Code {
+    #[new(default)]
+    pub prgs: HashMap<u16, BankData>, // Bank to program
+    #[new(default)]
+    pub chrs: HashMap<u16, BankData>, // Bank to character
+    #[new(value = "0")]
     pub mapper: u16,
+    #[new(value = "0")]
     pub submapper: u8,
+    #[new(default)]
     pub mirror: Mirror,
 }
 
@@ -123,7 +128,7 @@ pub struct CodeGenInfo {
     #[new(value = "0")]
     curr_chr_bank: u16, // Current bank number
     #[new(value = "true")]
-    curr_is_prg: bool, // True if newly used .bank accept "prg"
+    curr_is_prg: bool, // True if .pbank is more recently used than .cbank
 }
 
 /// A struct which generate prg and chr codes from given statements.
@@ -137,22 +142,11 @@ pub struct CodeGen {
     symtable: SymbolTable,
 
     #[new(default)]
-    prgs: HashMap<u16, BankData>, // Generated code for each bank.
-    #[new(default)]
-    chrs: HashMap<u16, BankData>, // Generated code for each bank.
-    #[new(value = "0")]
-    mapper: u16,
-    #[new(value = "0")]
-    submapper: u8,
-    #[new(default)]
-    mirror: Mirror,
+    code: Code,
 }
 
 impl CodeGen {
-    pub fn gen(
-        mut self,
-        stmts: Vec<Statement>
-    ) -> Result<GeneratedCode, CodeGenError> {
+    pub fn gen(mut self, stmts: Vec<Statement>) -> Result<Code, CodeGenError> {
         self.info = CodeGenInfo::new(true);
         for stmt in stmts.iter() {
             self.statement(stmt)?;
@@ -161,9 +155,7 @@ impl CodeGen {
         for stmt in stmts.iter() {
             self.statement(stmt)?;
         }
-        Ok(GeneratedCode::new(
-            self.prgs, self.chrs, self.mapper, self.submapper, self.mirror
-        ))
+        Ok(self.code)
     }
 }
 
@@ -438,9 +430,9 @@ impl CodeGen {
 
         self.info.curr_prg_bank = bank;
         self.info.curr_is_prg = true;
-        match self.prgs.get_mut(&bank) {
+        match self.code.prgs.get_mut(&bank) {
             None => {
-                self.prgs.insert(bank, BankData::new(base));
+                self.code.prgs.insert(bank, BankData::new(base));
             }
             _ => (),
         }
@@ -487,9 +479,9 @@ impl CodeGen {
 
         self.info.curr_chr_bank = bank;
         self.info.curr_is_prg = false;
-        match self.chrs.get_mut(&bank) {
+        match self.code.chrs.get_mut(&bank) {
             None => {
-                self.chrs.insert(bank, BankData::new(base));
+                self.code.chrs.insert(bank, BankData::new(base));
             }
             _ => (),
         }
@@ -519,7 +511,7 @@ impl CodeGen {
                 expect: "integer"
             })
         };
-        self.mapper = value;
+        self.code.mapper = value;
         Ok(())
     }
 
@@ -546,7 +538,7 @@ impl CodeGen {
                 expect: "integer"
             })
         };
-        self.submapper = value as u8;
+        self.code.submapper = value as u8;
         Ok(())
     }
 
@@ -573,7 +565,7 @@ impl CodeGen {
                 expect: "integer"
             })
         };
-        self.mirror = match value {
+        self.code.mirror = match value {
             0 => Mirror::HorizontalOrMapperControlled,
             1 => Mirror::Vertical,
             2 => Mirror::ForuScreen,
@@ -687,14 +679,14 @@ impl CodeGen {
         let len = bytes.len();
 
         let data = if self.info.curr_is_prg {
-            match self.prgs.get_mut(&self.info.curr_prg_bank) {
+            match self.code.prgs.get_mut(&self.info.curr_prg_bank) {
                 Some(prg) => prg,
                 None => return Err(CodeGenError::NeedBankSwitch {
                     span
                 }),
             }
         } else {
-            match self.chrs.get_mut(&self.info.curr_chr_bank) {
+            match self.code.chrs.get_mut(&self.info.curr_chr_bank) {
                 Some(chr) => chr,
                 None => return Err(CodeGenError::NeedBankSwitch {
                     span
