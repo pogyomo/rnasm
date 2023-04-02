@@ -49,6 +49,8 @@ pub enum CodeGenError {
     FileTooBig { span: Span },
     #[error("current address ${address:04X} is small on current bank")]
     AddressIsSmall { span: Span, address: u16 },
+    #[error("need .pbank or .cbank before this")]
+    NeedBankSwitch { span: Span },
 }
 
 impl Spannable for CodeGenError {
@@ -71,6 +73,7 @@ impl Spannable for CodeGenError {
             FailedToReadFile { span, .. } => span,
             FileTooBig { span } => span,
             AddressIsSmall { span, .. } => span,
+            NeedBankSwitch { span } => span,
         }
     }
 }
@@ -686,15 +689,16 @@ impl CodeGen {
         let data = if self.info.curr_is_prg {
             match self.prgs.get_mut(&self.info.curr_prg_bank) {
                 Some(prg) => prg,
-                // User only can change curr_prg_bank using pbank and bpank
-                // create the data associated with it.
-                None => unreachable!(),
+                None => return Err(CodeGenError::NeedBankSwitch {
+                    span
+                }),
             }
         } else {
             match self.chrs.get_mut(&self.info.curr_chr_bank) {
                 Some(chr) => chr,
-                // Same as above.
-                None => unreachable!(),
+                None => return Err(CodeGenError::NeedBankSwitch {
+                    span
+                }),
             }
         };
         let relative_addr = if self.info.address < data.base {
