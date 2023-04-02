@@ -47,6 +47,8 @@ pub enum CodeGenError {
     FailedToReadFile { span: Span, reason: std::io::Error },
     #[error("file too big to use")]
     FileTooBig { span: Span },
+    #[error("current address ${address:04X} is small on current bank")]
+    AddressIsSmall { span: Span, address: u16 },
 }
 
 impl Spannable for CodeGenError {
@@ -68,6 +70,7 @@ impl Spannable for CodeGenError {
             FailedToOpneFile { span, .. } => span,
             FailedToReadFile { span, .. } => span,
             FileTooBig { span } => span,
+            AddressIsSmall { span, .. } => span,
         }
     }
 }
@@ -240,40 +243,41 @@ impl CodeGen {
                 });
             };
 
+            let span = actual.span();
             if mnemonic.is_relative() {
                 if self.info.address + 2 < value {
                     if value - self.info.address - 2 <= 127 {
                         let diff = (value - self.info.address - 2) as u8;
-                        self.write(vec![byte, diff])?;
+                        self.write(vec![byte, diff], span)?;
                     } else {
                         return Err(CodeGenError::RelativeExceedRange {
-                            span: actual.span()
+                            span
                         });
                     }
                 } else {
                     if self.info.address + 2 - value <= 128 {
                         let diff = (self.info.address + 2 - value) as u8;
-                        self.write(vec![byte, (!diff).wrapping_add(1)])?;
+                        self.write(vec![byte, (!diff).wrapping_add(1)], span)?;
                     } else {
                         return Err(CodeGenError::RelativeExceedRange {
-                            span: actual.span()
+                            span
                         });
                     }
                 }
             } else {
                 match opcode.to_byte_len() {
-                    OpcodeByteLen::One => self.write(vec![byte])?,
+                    OpcodeByteLen::One => self.write(vec![byte], span)?,
                     OpcodeByteLen::Two => match cast {
                         CastStrategy::Lsb => {
-                            self.write(vec![byte, value.to_le_bytes()[0]])?;
+                            self.write(vec![byte, value.to_le_bytes()[0]], span)?;
                         }
                         CastStrategy::Msb => {
-                            self.write(vec![byte, value.to_le_bytes()[1]])?;
+                            self.write(vec![byte, value.to_le_bytes()[1]], span)?;
                         }
                     }
                     OpcodeByteLen::Three => {
                         let value = value.to_le_bytes();
-                        self.write(vec![byte, value[0], value[1]])?;
+                        self.write(vec![byte, value[0], value[1]], span)?;
                     }
                 }
             }
@@ -362,7 +366,7 @@ impl CodeGen {
                             expect: "integer"
                         })
                     };
-                    self.write(vec![value.to_le_bytes()[0]])?;
+                    self.write(vec![value.to_le_bytes()[0]], pseudo.span())?;
                 } else {
                     self.info.address = self.info.address.wrapping_add(1);
                 }
@@ -382,7 +386,7 @@ impl CodeGen {
                             expect: "integer"
                         })
                     };
-                    self.write(value.to_le_bytes().to_vec())?;
+                    self.write(value.to_le_bytes().to_vec(), pseudo.span())?;
                 } else {
                     self.info.address = self.info.address.wrapping_add(2);
                 }
@@ -624,7 +628,7 @@ impl CodeGen {
             bytes.len() as u16
         };
         if !self.info.is_pass1 {
-            self.write(bytes)?;
+            self.write(bytes, pseudo.span())?;
         } else {
             self.info.address = self.info.address.wrapping_add(len);
         }
@@ -676,13 +680,14 @@ impl CodeGen {
 
 impl CodeGen {
     /// Write bytes to current address then advance the address.
-    fn write(&mut self, bytes: Vec<u8>) -> Result<(), CodeGenError> {
+    fn write(&mut self, bytes: Vec<u8>, span: Span) -> Result<(), CodeGenError> {
         let len = bytes.len();
 
         let data = if self.info.curr_is_prg {
             match self.prgs.get_mut(&self.info.curr_prg_bank) {
                 Some(prg) => prg,
-                // User only can change curr_prg_bank using pbank.
+                // User only can change curr_prg_bank using pbank and bpank
+                // create the data associated with it.
                 None => unreachable!(),
             }
         } else {
@@ -692,7 +697,14 @@ impl CodeGen {
                 None => unreachable!(),
             }
         };
-        data.data.push((self.info.address - data.base, bytes));
+        let relative_addr = if self.info.address < data.base {
+            return Err(CodeGenError::AddressIsSmall {
+                span, address: self.info.address
+            })
+        } else {
+            self.info.address - data.base
+        };
+        data.data.push((relative_addr, bytes));
 
         self.info.address = self.info.address.wrapping_add(len as u16);
         Ok(())
