@@ -53,6 +53,10 @@ pub enum CodeGenError {
     NeedBankSwitch { span: Span },
     #[error("indirect can't use < or > to its expression")]
     IndirectCantUseCast { span: Span },
+    #[error("multiple call of .pbankdef to the bank number")]
+    MultipleCallOfPBankDef { span: Span },
+    #[error("multiple call of .cbankdef to the bank number")]
+    MultipleCallOfCBankDef { span: Span },
 }
 
 impl Spannable for CodeGenError {
@@ -77,6 +81,8 @@ impl Spannable for CodeGenError {
             AddressIsSmall { span, .. } => span,
             NeedBankSwitch { span } => span,
             IndirectCantUseCast { span } => span,
+            MultipleCallOfPBankDef { span } => span,
+            MultipleCallOfCBankDef { span } => span,
         }
     }
 }
@@ -198,7 +204,9 @@ impl CodeGen {
             "db" => self.db(pseudo),
             "dw" => self.dw(pseudo),
             "pbank" => self.pbank(pseudo),
+            "pbankdef" => self.pbankdef(pseudo),
             "cbank" => self.cbank(pseudo),
+            "cbankdef" => self.cbankdef(pseudo),
             "inesmap" => self.inesmap(pseudo),
             "inessmap" => self.inessmap(pseudo),
             "inesmir" => self.inesmir(pseudo),
@@ -336,6 +344,7 @@ impl CodeGen {
 }
 
 impl CodeGen {
+    /// Change current address.
     fn org(&mut self, pseudo: &PseudoInstruction) -> Result<(), CodeGenError> {
         let Some(ref operand) = pseudo.operand else {
             return Err(CodeGenError::InvalidNumberOfArguments {
@@ -362,6 +371,7 @@ impl CodeGen {
         Ok(())
     }
 
+    /// Write bytes.
     fn db(&mut self, pseudo: &PseudoInstruction) -> Result<(), CodeGenError> {
         if let Some(ref operand) = pseudo.operand {
             for arg in operand.args.iter() {
@@ -382,6 +392,7 @@ impl CodeGen {
         Ok(())
     }
 
+    // Write words.
     fn dw(&mut self, pseudo: &PseudoInstruction) -> Result<(), CodeGenError> {
         if let Some(ref operand) = pseudo.operand {
             for arg in operand.args.iter() {
@@ -403,20 +414,22 @@ impl CodeGen {
     }
 
     /// Change current program bank.
-    /// This accept at most two integer: bank number and base address.
-    /// If only one integer passed, this equal to pass 0 to second argument.
     fn pbank(&mut self, pseudo: &PseudoInstruction) -> Result<(), CodeGenError> {
+        if self.info.is_pass1 {
+            return Ok(())
+        }
+
         let Some(ref operand) = pseudo.operand else {
             return Err(CodeGenError::InvalidNumberOfArguments {
                 span: pseudo.span(),
-                expect: "1 or 2",
+                expect: "1",
                 got: 0
             })
         };
         if operand.args.len() > 2 {
             return Err(CodeGenError::InvalidNumberOfArguments {
                 span: pseudo.span(),
-                expect: "1 or 2",
+                expect: "1",
                 got: operand.args.len()
             })
         }
@@ -427,45 +440,30 @@ impl CodeGen {
                 span: operand.args.first().span(),
                 expect: "integer"
             })
-        };
-        let base = if operand.args.len() == 2 {
-            match *self.eval(&operand.args[1])? {
-                Object::IntegerObj(value) => value.value,
-                _ => return Err(CodeGenError::InvalidTypeOfArgument {
-                    span: operand.args.first().span(),
-                    expect: "integer"
-                })
-            }
-        } else {
-            0
         };
 
         self.info.curr_prg_bank = bank;
         self.info.curr_is_prg = true;
-        match self.code.prgs.get_mut(&bank) {
-            None => {
-                self.code.prgs.insert(bank, BankData::new(base));
-            }
-            _ => (),
-        }
         Ok(())
     }
 
-    /// Change current character bank.
-    /// This accept at most two integer: bank number and base address.
-    /// If only one integer passed, this equal to pass 0 to second argument.
-    fn cbank(&mut self, pseudo: &PseudoInstruction) -> Result<(), CodeGenError> {
+    /// Define the program bank's base address.
+    fn pbankdef(&mut self, pseudo: &PseudoInstruction) -> Result<(), CodeGenError> {
+        if self.info.is_pass1 {
+            return Ok(())
+        }
+
         let Some(ref operand) = pseudo.operand else {
             return Err(CodeGenError::InvalidNumberOfArguments {
                 span: pseudo.span(),
-                expect: "1 or 2",
+                expect: "2",
                 got: 0
             })
         };
-        if operand.args.len() > 2 {
+        if operand.args.len() != 2 {
             return Err(CodeGenError::InvalidNumberOfArguments {
                 span: pseudo.span(),
-                expect: "1 or 2",
+                expect: "2",
                 got: operand.args.len()
             })
         }
@@ -477,27 +475,100 @@ impl CodeGen {
                 expect: "integer"
             })
         };
-        let base = if operand.args.len() == 2 {
-            match *self.eval(&operand.args[1])? {
-                Object::IntegerObj(value) => value.value,
-                _ => return Err(CodeGenError::InvalidTypeOfArgument {
-                    span: operand.args.first().span(),
-                    expect: "integer"
-                })
-            }
+        let base = match *self.eval(&operand.args[1])? {
+            Object::IntegerObj(value) => value.value,
+            _ => return Err(CodeGenError::InvalidTypeOfArgument {
+                span: operand.args.first().span(),
+                expect: "integer"
+            })
+        };
+
+        if self.code.prgs.insert(bank, BankData::new(base)).is_some() {
+            Err(CodeGenError::MultipleCallOfPBankDef {
+                span: pseudo.span()
+            })
         } else {
-            0
+            Ok(())
+        }
+    }
+
+    /// Change current character bank.
+    fn cbank(&mut self, pseudo: &PseudoInstruction) -> Result<(), CodeGenError> {
+        if self.info.is_pass1 {
+            return Ok(())
+        }
+
+        let Some(ref operand) = pseudo.operand else {
+            return Err(CodeGenError::InvalidNumberOfArguments {
+                span: pseudo.span(),
+                expect: "1",
+                got: 0
+            })
+        };
+        if operand.args.len() > 2 {
+            return Err(CodeGenError::InvalidNumberOfArguments {
+                span: pseudo.span(),
+                expect: "1",
+                got: operand.args.len()
+            })
+        }
+
+        let bank = match *self.eval(&operand.args[0])? {
+            Object::IntegerObj(value) => value.value,
+            _ => return Err(CodeGenError::InvalidTypeOfArgument {
+                span: operand.args.first().span(),
+                expect: "integer"
+            })
         };
 
         self.info.curr_chr_bank = bank;
         self.info.curr_is_prg = false;
-        match self.code.chrs.get_mut(&bank) {
-            None => {
-                self.code.chrs.insert(bank, BankData::new(base));
-            }
-            _ => (),
-        }
         Ok(())
+    }
+
+    /// Define the character bank's base address.
+    fn cbankdef(&mut self, pseudo: &PseudoInstruction) -> Result<(), CodeGenError> {
+        if self.info.is_pass1 {
+            return Ok(())
+        }
+
+        let Some(ref operand) = pseudo.operand else {
+            return Err(CodeGenError::InvalidNumberOfArguments {
+                span: pseudo.span(),
+                expect: "2",
+                got: 0
+            })
+        };
+        if operand.args.len() != 2 {
+            return Err(CodeGenError::InvalidNumberOfArguments {
+                span: pseudo.span(),
+                expect: "2",
+                got: operand.args.len()
+            })
+        }
+
+        let bank = match *self.eval(&operand.args[0])? {
+            Object::IntegerObj(value) => value.value,
+            _ => return Err(CodeGenError::InvalidTypeOfArgument {
+                span: operand.args.first().span(),
+                expect: "integer"
+            })
+        };
+        let base = match *self.eval(&operand.args[1])? {
+            Object::IntegerObj(value) => value.value,
+            _ => return Err(CodeGenError::InvalidTypeOfArgument {
+                span: operand.args.first().span(),
+                expect: "integer"
+            })
+        };
+
+        if self.code.chrs.insert(bank, BankData::new(base)).is_some() {
+            Err(CodeGenError::MultipleCallOfCBankDef {
+                span: pseudo.span()
+            })
+        } else {
+            Ok(())
+        }
     }
 
     fn inesmap(&mut self, pseudo: &PseudoInstruction) -> Result<(), CodeGenError> {
