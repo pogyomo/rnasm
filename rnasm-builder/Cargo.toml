@@ -8,3 +8,4 @@ edition = "2021"
 [dependencies]
 derive-new = "0.5.9"
 thiserror = "1.0.40"
+rnasm-codegen = { path = "../rnasm-codegen" }

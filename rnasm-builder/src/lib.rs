@@ -2,8 +2,7 @@ use derive_new::new;
 use thiserror::Error;
 use std::collections::HashSet;
 use header::HeaderBuilder;
-
-pub use header::HeaderMirror;
+use rnasm_codegen::{BankData, Mirror};
 
 mod header;
 
@@ -13,10 +12,6 @@ pub enum BuilderError {
     TooManyPrgRomUnit { got: usize },
     #[error("too many chrrom unit: got {got}")]
     TooManyChrRomUnit { got: usize },
-    #[error("you can't write program to {address:04X}")]
-    IncorrectPrgRomAddress { address: u16 },
-    #[error("you can't write character to {address:04X}")]
-    IncorrectChrRomAddress { address: u16 },
     #[error("{byte:02X} already exist at ${address:04X} of prgrom")]
     ByteAlreadyExistOnPrgRom { address: u16, byte: u8 },
     #[error("{byte:02X} already exist at ${address:04X} of chrrom")]
@@ -24,17 +19,14 @@ pub enum BuilderError {
 }
 
 /// A struct which create rom from given prgrom, chrrom and some infomation.
-///
-/// We expect prgrom's address is 0x8000 (0xC000) <= address <= 0xBFFF (0xFFFF)
-/// and chrrom's address is 0x0000 <= address <= 0x1FFF.
 #[derive(new)]
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Builder {
-    prgrom: Vec<Vec<(u16, u8)>>,
-    chrrom: Vec<Vec<(u16, u8)>>,
+    prgrom: Vec<BankData>,
+    chrrom: Vec<BankData>,
     mapper: u16,
     submapper: u8,
-    mirror: HeaderMirror,
+    mirror: Mirror,
 }
 
 impl Builder {
@@ -65,48 +57,35 @@ impl Builder {
         let mut rom = Vec::from(header);
         for prg in self.prgrom.iter() {
             let mut check = HashSet::new();
-            let mut bytes = vec![0; 0x4000];
-            for (address, byte) in prg.iter() {
-                let (address, byte) = (*address, *byte);
-                if address < 0x8000 {
-                    return Err(BuilderError::IncorrectPrgRomAddress {
-                        address
-                    })
+            let mut target = vec![0; 0x4000];
+            for (address, bytes) in prg.data.iter() {
+                for (byte, offset) in bytes.iter().zip(0..) {
+                    let (address, byte) = (*address, *byte);
+                    if !check.insert(address + offset) {
+                        return Err(BuilderError::ByteAlreadyExistOnPrgRom {
+                            address: address + offset + prg.base, byte
+                        })
+                    }
+                    target[offset as usize + address as usize] = byte;
                 }
-                // We need convert given address into 0-based address.
-                let addr = if address >= 0xC000 {
-                    address - 0xC000
-                } else {
-                    address - 0x8000
-                };
-                if !check.insert(addr) {
-                    return Err(BuilderError::ByteAlreadyExistOnPrgRom {
-                        address, byte
-                    })
-                }
-                bytes[addr as usize] = byte;
             }
-            rom.append(&mut bytes);
+            rom.append(&mut target);
         }
         for chr in self.chrrom.iter() {
             let mut check = HashSet::new();
-            let mut bytes = vec![0; 0x8000];
-            for (address, byte) in chr.iter() {
-                let (address, byte) = (*address, *byte);
-                if !check.insert(address) {
-                    return Err(BuilderError::ByteAlreadyExistOnChrRom {
-                        address, byte
-                    })
-                }
-                if address >= 0x2000 {
-                    return Err(BuilderError::IncorrectChrRomAddress {
-                        address
-                    })
-                } else { // 0 <= address <= 0x1FFF
-                    bytes[address as usize] = byte;
+            let mut target = vec![0; 0x2000];
+            for (address, bytes) in chr.data.iter() {
+                for (byte, offset) in bytes.iter().zip(0..) {
+                    let (address, byte) = (*address, *byte);
+                    if !check.insert(address + offset) {
+                        return Err(BuilderError::ByteAlreadyExistOnPrgRom {
+                            address: address + offset + chr.base, byte
+                        })
+                    }
+                    target[offset as usize + address as usize] = byte;
                 }
             }
-            rom.append(&mut bytes);
+            rom.append(&mut target);
         }
         Ok(rom)
     }

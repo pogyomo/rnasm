@@ -1,12 +1,5 @@
 use derive_new::new;
-
-#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum HeaderMirror {
-    #[default]
-    HorizontalOrMapperControlled,
-    Vertical,
-    ForuScreen,
-}
+use rnasm_codegen::Mirror;
 
 #[derive(new)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -20,12 +13,12 @@ pub struct HeaderBuilder {
     #[new(value = "0")]
     submapper: u8,
     #[new(default)]
-    mirror: HeaderMirror,
+    mirror: Mirror,
 }
 
 impl HeaderBuilder {
     pub fn build(self) -> [u8; 16] {
-        use HeaderMirror::*;
+        use Mirror::*;
 
         let mut header = [0; 16];
 
@@ -113,7 +106,7 @@ impl HeaderBuilder {
     }
 
     /// Set mirroring method.
-    pub fn mirror(mut self, mirror: HeaderMirror) -> Self {
+    pub fn mirror(mut self, mirror: Mirror) -> Self {
         self.mirror = mirror;
         self
     }

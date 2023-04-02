@@ -5,7 +5,6 @@ use rnasm_ast::{
     Statement, Instruction, Label, PseudoInstruction, ActualInstruction,
     GlobalLabel, LocalLabel, Expression, InfixOp, CastStrategy
 };
-use rnasm_builder::HeaderMirror;
 use rnasm_opcode::{Mnemonic, Opcode, OpcodeByteLen};
 use rnasm_span::{Span, Spannable};
 use object::{StringObj, IntegerObj, Object};
@@ -31,7 +30,7 @@ pub enum CodeGenError {
     #[error("cannot define local label: must be placed under global label")]
     CannotDefineLocalLabel { span: Span },
     #[error("invalid number of arguemnts: expect {expect}, got {got}")]
-    InvalidNumberOfArguments { span: Span, expect: usize, got: usize },
+    InvalidNumberOfArguments { span: Span, expect: &'static str, got: usize },
     #[error("invalid type of arguemnt: expect {expect}")]
     InvalidTypeOfArgument { span: Span, expect: &'static str },
     #[error("invalid value of arguemnt: expect {expect}")]
@@ -77,11 +76,28 @@ impl Spannable for CodeGenError {
 #[derive(new)]
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct GeneratedCode {
-    pub prgs: HashMap<u16, Vec<(u16, Vec<u8>)>>,
-    pub chrs: HashMap<u16, Vec<(u16, Vec<u8>)>>,
+    pub prgs: HashMap<u16, BankData>, // Bank-program pairs
+    pub chrs: HashMap<u16, BankData>, // Bank-character pairs
     pub mapper: u16,
     pub submapper: u8,
-    pub mirror: HeaderMirror,
+    pub mirror: Mirror,
+}
+
+// Mirroring
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Mirror {
+    #[default]
+    HorizontalOrMapperControlled,
+    Vertical,
+    ForuScreen,
+}
+
+#[derive(new)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct BankData {
+    pub base: u16, // Lowest address of this bank.
+    #[new(default)]
+    pub data: Vec<(u16, Vec<u8>)>, // data.0 + base is actual address of the data.
 }
 
 /// A set of infomation which is required while generating code.
@@ -95,11 +111,11 @@ pub struct CodeGenInfo {
     #[new(value = "0")]
     address: u16,
     #[new(value = "None")]
-    curr_label: Option<String>,
+    curr_label: Option<String>, // Current label if exist.
     #[new(value = "0")]
-    curr_prg_bank: u16,
+    curr_prg_bank: u16, // Current bank number
     #[new(value = "0")]
-    curr_chr_bank: u16,
+    curr_chr_bank: u16, // Current bank number
     #[new(value = "true")]
     curr_is_prg: bool, // True if newly used .bank accept "prg"
 }
@@ -115,15 +131,15 @@ pub struct CodeGen {
     symtable: SymbolTable,
 
     #[new(default)]
-    prgs: HashMap<u16, Vec<(u16, Vec<u8>)>>, // Generated code for each bank.
+    prgs: HashMap<u16, BankData>, // Generated code for each bank.
     #[new(default)]
-    chrs: HashMap<u16, Vec<(u16, Vec<u8>)>>, // Generated code for each bank.
+    chrs: HashMap<u16, BankData>, // Generated code for each bank.
     #[new(value = "0")]
     mapper: u16,
     #[new(value = "0")]
     submapper: u8,
     #[new(default)]
-    mirror: HeaderMirror,
+    mirror: Mirror,
 }
 
 impl CodeGen {
@@ -180,7 +196,8 @@ impl CodeGen {
             "org" => self.org(pseudo),
             "db" => self.db(pseudo),
             "dw" => self.dw(pseudo),
-            "bank" => self.bank(pseudo),
+            "pbank" => self.pbank(pseudo),
+            "cbank" => self.cbank(pseudo),
             "inesmap" => self.inesmap(pseudo),
             "inessmap" => self.inessmap(pseudo),
             "inesmir" => self.inesmir(pseudo),
@@ -312,14 +329,14 @@ impl CodeGen {
         let Some(ref operand) = pseudo.operand else {
             return Err(CodeGenError::InvalidNumberOfArguments {
                 span: pseudo.span(),
-                expect: 1,
+                expect: "1",
                 got: 0
             })
         };
         if operand.args.len() != 1 {
             return Err(CodeGenError::InvalidNumberOfArguments {
                 span: pseudo.span(),
-                expect: 1,
+                expect: "1",
                 got: operand.args.len()
             })
         }
@@ -374,52 +391,100 @@ impl CodeGen {
         Ok(())
     }
 
-    /// Change current bank.
-    ///
-    /// The bank number correspond to the place which the generated code placed.
-    fn bank(&mut self, pseudo: &PseudoInstruction) -> Result<(), CodeGenError> {
+    /// Change current program bank.
+    /// This accept at most two integer: bank number and base address.
+    /// If only one integer passed, this equal to pass 0 to second argument.
+    fn pbank(&mut self, pseudo: &PseudoInstruction) -> Result<(), CodeGenError> {
         let Some(ref operand) = pseudo.operand else {
             return Err(CodeGenError::InvalidNumberOfArguments {
                 span: pseudo.span(),
-                expect: 2,
+                expect: "1 or 2",
                 got: 0
             })
         };
-        if operand.args.len() != 2 {
+        if operand.args.len() > 2 {
             return Err(CodeGenError::InvalidNumberOfArguments {
                 span: pseudo.span(),
-                expect: 2,
+                expect: "1 or 2",
                 got: operand.args.len()
             })
         }
 
-        let name = match &*self.eval(operand.args.first())? {
-            Object::StringObj(str) => str.value.clone(),
-            _ => return Err(CodeGenError::InvalidTypeOfArgument {
-                span: operand.args.first().span(),
-                expect: "string"
-            })
-        };
-        let value = match *self.eval(&operand.args[1])? {
+        let bank = match *self.eval(&operand.args[0])? {
             Object::IntegerObj(value) => value.value,
             _ => return Err(CodeGenError::InvalidTypeOfArgument {
                 span: operand.args.first().span(),
                 expect: "integer"
             })
         };
-        match name.as_str() {
-            "prg" => {
-                self.info.curr_prg_bank = value;
-                self.info.curr_is_prg = true;
+        let base = if operand.args.len() == 2 {
+            match *self.eval(&operand.args[1])? {
+                Object::IntegerObj(value) => value.value,
+                _ => return Err(CodeGenError::InvalidTypeOfArgument {
+                    span: operand.args.first().span(),
+                    expect: "integer"
+                })
             }
-            "chr" => {
-                self.info.curr_chr_bank = value;
-                self.info.curr_is_prg = false;
+        } else {
+            0
+        };
+
+        self.info.curr_prg_bank = bank;
+        self.info.curr_is_prg = true;
+        match self.prgs.get_mut(&bank) {
+            None => {
+                self.prgs.insert(bank, BankData::new(base));
             }
-            _ => return Err(CodeGenError::InvalidValueOfArgument {
-                span: operand.args.first().span(),
-                expect: "prg or chr"
+            _ => (),
+        }
+        Ok(())
+    }
+
+    /// Change current character bank.
+    /// This accept at most two integer: bank number and base address.
+    /// If only one integer passed, this equal to pass 0 to second argument.
+    fn cbank(&mut self, pseudo: &PseudoInstruction) -> Result<(), CodeGenError> {
+        let Some(ref operand) = pseudo.operand else {
+            return Err(CodeGenError::InvalidNumberOfArguments {
+                span: pseudo.span(),
+                expect: "1 or 2",
+                got: 0
             })
+        };
+        if operand.args.len() > 2 {
+            return Err(CodeGenError::InvalidNumberOfArguments {
+                span: pseudo.span(),
+                expect: "1 or 2",
+                got: operand.args.len()
+            })
+        }
+
+        let bank = match *self.eval(&operand.args[0])? {
+            Object::IntegerObj(value) => value.value,
+            _ => return Err(CodeGenError::InvalidTypeOfArgument {
+                span: operand.args.first().span(),
+                expect: "integer"
+            })
+        };
+        let base = if operand.args.len() == 2 {
+            match *self.eval(&operand.args[1])? {
+                Object::IntegerObj(value) => value.value,
+                _ => return Err(CodeGenError::InvalidTypeOfArgument {
+                    span: operand.args.first().span(),
+                    expect: "integer"
+                })
+            }
+        } else {
+            0
+        };
+
+        self.info.curr_chr_bank = bank;
+        self.info.curr_is_prg = false;
+        match self.chrs.get_mut(&bank) {
+            None => {
+                self.chrs.insert(bank, BankData::new(base));
+            }
+            _ => (),
         }
         Ok(())
     }
@@ -428,14 +493,14 @@ impl CodeGen {
         let Some(ref operand) = pseudo.operand else {
             return Err(CodeGenError::InvalidNumberOfArguments {
                 span: pseudo.span(),
-                expect: 1,
+                expect: "1",
                 got: 0
             })
         };
         if operand.args.len() != 1 {
             return Err(CodeGenError::InvalidNumberOfArguments {
                 span: pseudo.span(),
-                expect: 1,
+                expect: "1",
                 got: operand.args.len()
             })
         }
@@ -455,14 +520,14 @@ impl CodeGen {
         let Some(ref operand) = pseudo.operand else {
             return Err(CodeGenError::InvalidNumberOfArguments {
                 span: pseudo.span(),
-                expect: 1,
+                expect: "1",
                 got: 0
             })
         };
         if operand.args.len() != 1 {
             return Err(CodeGenError::InvalidNumberOfArguments {
                 span: pseudo.span(),
-                expect: 1,
+                expect: "1",
                 got: operand.args.len()
             })
         }
@@ -482,14 +547,14 @@ impl CodeGen {
         let Some(ref operand) = pseudo.operand else {
             return Err(CodeGenError::InvalidNumberOfArguments {
                 span: pseudo.span(),
-                expect: 1,
+                expect: "1",
                 got: 0
             })
         };
         if operand.args.len() != 1 {
             return Err(CodeGenError::InvalidNumberOfArguments {
                 span: pseudo.span(),
-                expect: 1,
+                expect: "1",
                 got: operand.args.len()
             })
         }
@@ -502,9 +567,9 @@ impl CodeGen {
             })
         };
         self.mirror = match value {
-            0 => HeaderMirror::HorizontalOrMapperControlled,
-            1 => HeaderMirror::Vertical,
-            2 => HeaderMirror::ForuScreen,
+            0 => Mirror::HorizontalOrMapperControlled,
+            1 => Mirror::Vertical,
+            2 => Mirror::ForuScreen,
             _ => return Err(CodeGenError::InvalidValueOfArgument {
                 span: operand.args.first().span(),
                 expect: "0, 1 or 2"
@@ -517,14 +582,14 @@ impl CodeGen {
         let Some(ref operand) = pseudo.operand else {
             return Err(CodeGenError::InvalidNumberOfArguments {
                 span: pseudo.span(),
-                expect: 1,
+                expect: "1",
                 got: 0
             })
         };
         if operand.args.len() != 1 {
             return Err(CodeGenError::InvalidNumberOfArguments {
                 span: pseudo.span(),
-                expect: 1,
+                expect: "1",
                 got: operand.args.len()
             })
         }
@@ -570,14 +635,14 @@ impl CodeGen {
         let Some(ref operand) = pseudo.operand else {
             return Err(CodeGenError::InvalidNumberOfArguments {
                 span: pseudo.span(),
-                expect: 2,
+                expect: "2",
                 got: 0
             })
         };
         if operand.args.len() != 2 {
             return Err(CodeGenError::InvalidNumberOfArguments {
                 span: pseudo.span(),
-                expect: 2,
+                expect: "2",
                 got: operand.args.len()
             })
         }
@@ -613,27 +678,22 @@ impl CodeGen {
     /// Write bytes to current address then advance the address.
     fn write(&mut self, bytes: Vec<u8>) -> Result<(), CodeGenError> {
         let len = bytes.len();
-        if self.info.curr_is_prg {
+
+        let data = if self.info.curr_is_prg {
             match self.prgs.get_mut(&self.info.curr_prg_bank) {
-                Some(vec) => vec.push((self.info.address, bytes)),
-                None => {
-                    self.prgs.insert(
-                        self.info.curr_prg_bank,
-                        vec![(self.info.address, bytes)]
-                    );
-                }
+                Some(prg) => prg,
+                // User only can change curr_prg_bank using pbank.
+                None => unreachable!(),
             }
         } else {
             match self.chrs.get_mut(&self.info.curr_chr_bank) {
-                Some(vec) => vec.push((self.info.address, bytes)),
-                None => {
-                    self.chrs.insert(
-                        self.info.curr_chr_bank,
-                        vec![(self.info.address, bytes)]
-                    );
-                }
+                Some(chr) => chr,
+                // Same as above.
+                None => unreachable!(),
             }
-        }
+        };
+        data.data.push((self.info.address - data.base, bytes));
+
         self.info.address = self.info.address.wrapping_add(len as u16);
         Ok(())
     }
