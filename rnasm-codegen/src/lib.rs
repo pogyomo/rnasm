@@ -1,3 +1,47 @@
+//! # Bank and base address
+//!
+//! There exist two type of banks: program bank and character bank.
+//!
+//! Each bank have its base address and size. User can change base address,
+//! but the bank size is fixed: program bank's size is `$4000` and character's
+//! size is `$2000`.
+//!
+//! For example, if program bank's base address is `$8000`, the bank's range
+//! is `$8000 ~ $BFFF`. Also, if a character bank's base address is `$0000`,
+//! the bank's range is `$0000 ~ $1FFF`.
+//!
+//! You can define each bank's base address using `.pbankdef` and `.cbankdef`
+//! where `.pbankdef` define program bank's base address and `.cbankdef`
+//! define character's base address. If `.pbankdef` or `.cbankdef` is called
+//! more than twice to the bank, this cause error.
+//!
+//! ```asm
+//!     .pbankdef 0 $8000 ; $8000 ~ $BFFF
+//!     .pbankdef 1 $C000 ; $C000 ~ $FFFF
+//!     .pbankdef 1 $8000 ; error
+//! ```
+//!
+//! You can change current bank using `.pbank` and `.cbank`, and can write
+//! byte or code to a specific address in the bank using `.org`.
+//!
+//! ```asm
+//!     .pbank 0 ; base = $8000
+//!     .org $8000
+//!     ; Write bytes to $8000 ~ $8005 of program bank 0
+//!     .db 0 1 2 3 4 5
+//!
+//!     .pbank 1 ; base = $8000
+//!     .org $8000
+//!     ; Write bytes to $8000 ~ $8003 of program bank 1
+//!     .db 6 7 8 9
+//!
+//!     .pbank 0
+//!     .org $BFFF
+//!     ; This cause error because writing 1 to $C000 is not valid due to
+//!     ; program bank 0 doesn't contain $C000
+//!     .db 0 1
+//! ```
+
 use derive_new::new;
 use thiserror::Error;
 use std::{rc::Rc, collections::HashMap, fs::File, io::Read};
