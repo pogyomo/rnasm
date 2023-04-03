@@ -57,6 +57,8 @@ pub enum CodeGenError {
     MultipleCallOfPBankDef { span: Span },
     #[error("multiple call of .cbankdef to the bank number")]
     MultipleCallOfCBankDef { span: Span },
+    #[error("target bytes is too long to write on current bank")]
+    TargetBytesIsTooLong { span: Span },
 }
 
 impl Spannable for CodeGenError {
@@ -83,6 +85,7 @@ impl Spannable for CodeGenError {
             IndirectCantUseCast { span } => span,
             MultipleCallOfPBankDef { span } => span,
             MultipleCallOfCBankDef { span } => span,
+            TargetBytesIsTooLong { span } => span,
         }
     }
 }
@@ -759,8 +762,6 @@ impl CodeGen {
 impl CodeGen {
     /// Write bytes to current address then advance the address.
     fn write(&mut self, bytes: Vec<u8>, span: Span) -> Result<(), CodeGenError> {
-        let len = bytes.len();
-
         let data = if self.info.curr_is_prg {
             match self.code.prgs.get_mut(&self.info.curr_prg_bank) {
                 Some(prg) => prg,
@@ -775,6 +776,13 @@ impl CodeGen {
                     span
                 }),
             }
+        };
+        let len = if bytes.len() > u16::MAX as usize {
+            return Err(CodeGenError::TargetBytesIsTooLong { span })
+        } else if self.info.address as usize + bytes.len() > data.base as usize + 0x4000 {
+            return Err(CodeGenError::TargetBytesIsTooLong { span })
+        } else {
+            bytes.len()
         };
         let relative_addr = if self.info.address < data.base {
             return Err(CodeGenError::AddressIsSmall {
