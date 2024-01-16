@@ -27,7 +27,7 @@ pub struct Args {
 /// * `code.get(i) == None => vec.get(i) = Some(BankData { data: vec![], .. })`
 ///
 /// If given hashmap is empty, returned vector is also empty.
-fn convert_banked_code(mut codes: HashMap<u16, BankData>) -> Vec<BankData> {
+fn linearize_bankdata(mut codes: HashMap<u16, BankData>) -> Vec<BankData> {
     let key_max = match codes.keys().into_iter().max() {
         Some(max) => *max,
         None => return Vec::new(),
@@ -115,8 +115,8 @@ fn main() {
 
     // Convert HashMap<u16, BankData> into Vec<BankData>
     // where the converted vector's length is equal to source's max key.
-    let prgrom = convert_banked_code(codes.prgs);
-    let chrrom = convert_banked_code(codes.chrs);
+    let prgrom = linearize_bankdata(codes.prgs);
+    let chrrom = linearize_bankdata(codes.chrs);
 
     let builder = Builder::new(prgrom, chrrom, codes.mapper, codes.submapper, codes.mirror);
     let rom = match builder.build() {
