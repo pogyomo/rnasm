@@ -1,11 +1,15 @@
 use clap::Parser as ClapParser;
-use std::{fs::File, io::{Read, Write}, collections::HashMap};
 use rnasm_builder::Builder;
-use rnasm_codegen::{CodeGen, BankData};
+use rnasm_codegen::{BankData, CodeGen};
 use rnasm_lexer::Lexer;
 use rnasm_parser::Parser;
 use rnasm_report::report;
 use rnasm_span::Spannable;
+use std::{
+    collections::HashMap,
+    fs::File,
+    io::{Read, Write},
+};
 
 #[derive(Debug, ClapParser)]
 #[command(version, long_about = None)]
@@ -70,7 +74,7 @@ fn main() {
                     e.span(),
                     &args.input,
                     "while lexing",
-                    &e.to_string()
+                    &e.to_string(),
                 );
             }
             return;
@@ -87,7 +91,7 @@ fn main() {
                     e.span(),
                     &args.input,
                     "while parsing",
-                    &e.to_string()
+                    &e.to_string(),
                 );
             }
             return;
@@ -103,7 +107,7 @@ fn main() {
                 e.span(),
                 &args.input,
                 "while generating",
-                &e.to_string()
+                &e.to_string(),
             );
             return;
         }
@@ -114,9 +118,7 @@ fn main() {
     let prgrom = convert_banked_code(codes.prgs);
     let chrrom = convert_banked_code(codes.chrs);
 
-    let builder = Builder::new(
-        prgrom, chrrom, codes.mapper, codes.submapper, codes.mirror
-    );
+    let builder = Builder::new(prgrom, chrrom, codes.mapper, codes.submapper, codes.mirror);
     let rom = match builder.build() {
         Ok(rom) => rom,
         Err(e) => {

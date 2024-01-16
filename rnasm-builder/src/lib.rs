@@ -1,8 +1,8 @@
 use derive_new::new;
-use thiserror::Error;
-use std::collections::HashSet;
 use header::HeaderBuilder;
 use rnasm_codegen::{BankData, Mirror};
+use std::collections::HashSet;
+use thiserror::Error;
 
 mod header;
 
@@ -19,8 +19,7 @@ pub enum BuilderError {
 }
 
 /// A struct which create rom from given prgrom, chrrom and some infomation.
-#[derive(new)]
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(new, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Builder {
     prgrom: Vec<BankData>,
     chrrom: Vec<BankData>,
@@ -33,15 +32,15 @@ impl Builder {
     pub fn build(self) -> Result<Vec<u8>, BuilderError> {
         let prgrom = if self.prgrom.len() > 0xEFF {
             return Err(BuilderError::TooManyPrgRomUnit {
-                got: self.prgrom.len()
-            })
+                got: self.prgrom.len(),
+            });
         } else {
             self.prgrom.len() as u16
         };
         let chrrom = if self.chrrom.len() > 0xEFF {
             return Err(BuilderError::TooManyChrRomUnit {
-                got: self.chrrom.len()
-            })
+                got: self.chrrom.len(),
+            });
         } else {
             self.chrrom.len() as u16
         };
@@ -63,8 +62,9 @@ impl Builder {
                     let (address, byte) = (*address, *byte);
                     if !check.insert(address + offset) {
                         return Err(BuilderError::ByteAlreadyExistOnPrgRom {
-                            address: address + offset + prg.base, byte
-                        })
+                            address: address + offset + prg.base,
+                            byte,
+                        });
                     }
                     target[offset as usize + address as usize] = byte;
                 }
@@ -79,8 +79,9 @@ impl Builder {
                     let (address, byte) = (*address, *byte);
                     if !check.insert(address + offset) {
                         return Err(BuilderError::ByteAlreadyExistOnPrgRom {
-                            address: address + offset + chr.base, byte
-                        })
+                            address: address + offset + chr.base,
+                            byte,
+                        });
                     }
                     target[offset as usize + address as usize] = byte;
                 }

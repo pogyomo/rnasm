@@ -1,8 +1,7 @@
 use derive_new::new;
 use rnasm_codegen::Mirror;
 
-#[derive(new)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(new, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct HeaderBuilder {
     #[new(value = "0")]
     prgrom_size: u16,
@@ -47,7 +46,7 @@ impl HeaderBuilder {
 
         // Write submapper number
         header[8] |= self.submapper.wrapping_shl(4);
-        
+
         // Write mirroring
         header[6] &= 0xF6; // Clear mirroring bits.
         header[6] |= match self.mirror {

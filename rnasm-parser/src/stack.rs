@@ -8,19 +8,21 @@
 //! tokens because the result ast need its span.
 
 use nonempty::NonEmpty;
-use std::rc::Rc;
 use rnasm_span::{Span, Spannable};
 use rnasm_token::Token;
+use std::rc::Rc;
 
 /// A struct which hold more than one token.
 pub struct TokenStack {
-    tokens: NonEmpty<Rc<Token>>
+    tokens: NonEmpty<Rc<Token>>,
 }
 
 impl TokenStack {
     /// Creat a new `TokenStack` with initial value.
     pub fn new(token: Rc<Token>) -> Self {
-        Self { tokens: NonEmpty::new(token) }
+        Self {
+            tokens: NonEmpty::new(token),
+        }
     }
 
     /// Add token to this stack.

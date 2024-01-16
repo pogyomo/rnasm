@@ -37,8 +37,7 @@ impl Spannable for Statement {
     }
 }
 
-#[derive(new)]
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(new, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct LabelStatement {
     pub label: Label,
 }
@@ -49,8 +48,7 @@ impl Spannable for LabelStatement {
     }
 }
 
-#[derive(new)]
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(new, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct InstStatement {
     pub inst: Instruction,
 }
@@ -61,8 +59,7 @@ impl Spannable for InstStatement {
     }
 }
 
-#[derive(new)]
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(new, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct LabelInstStatement {
     pub label: Label,
     pub inst: Instruction,
@@ -92,8 +89,7 @@ impl Spannable for Label {
     }
 }
 
-#[derive(new)]
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(new, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct GlobalLabel {
     span: Span,
     pub name: String,
@@ -105,8 +101,7 @@ impl Spannable for GlobalLabel {
     }
 }
 
-#[derive(new)]
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(new, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct LocalLabel {
     span: Span,
     pub name: String,
@@ -120,8 +115,7 @@ impl Spannable for LocalLabel {
 
 impl_convert!(Instruction, PseudoInstruction, ActualInstruction);
 
-#[derive(new)]
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(new, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Instruction {
     PseudoInstruction(PseudoInstruction),
     ActualInstruction(ActualInstruction),
@@ -137,8 +131,7 @@ impl Spannable for Instruction {
     }
 }
 
-#[derive(new)]
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(new, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct PseudoInstruction {
     pub name: InstName,
     pub operand: Option<PseudoOperand>,
@@ -153,8 +146,7 @@ impl Spannable for PseudoInstruction {
     }
 }
 
-#[derive(new)]
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(new, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ActualInstruction {
     pub name: InstName,
     pub operand: Option<ActualOperand>,
@@ -169,8 +161,7 @@ impl Spannable for ActualInstruction {
     }
 }
 
-#[derive(new)]
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(new, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct InstName {
     span: Span,
     pub name: String,
@@ -184,12 +175,14 @@ impl Spannable for InstName {
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct PseudoOperand {
-    pub args: NonEmpty<Expression>
+    pub args: NonEmpty<Expression>,
 }
 
 impl PseudoOperand {
     pub fn new(head: Expression, tail: Vec<Expression>) -> Self {
-        Self { args: NonEmpty { head, tail }}
+        Self {
+            args: NonEmpty { head, tail },
+        }
     }
 }
 
@@ -205,7 +198,11 @@ impl Spannable for PseudoOperand {
 
 impl_convert!(
     ActualOperand,
-    Accumulator, AbsoluteOrRelative, Immediate, Indirect, Zeropage
+    Accumulator,
+    AbsoluteOrRelative,
+    Immediate,
+    Indirect,
+    Zeropage
 );
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -230,8 +227,7 @@ impl Spannable for ActualOperand {
     }
 }
 
-#[derive(new)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(new, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Accumulator {
     span: Span,
 }
@@ -242,8 +238,7 @@ impl Spannable for Accumulator {
     }
 }
 
-#[derive(new)]
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(new, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct AbsoluteOrRelative {
     span: Span,
     pub expr: Expression,
@@ -256,8 +251,7 @@ impl Spannable for AbsoluteOrRelative {
     }
 }
 
-#[derive(new)]
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(new, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Immediate {
     span: Span,
     pub cast: CastStrategy,
@@ -270,8 +264,7 @@ impl Spannable for Immediate {
     }
 }
 
-#[derive(new)]
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(new, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Indirect {
     span: Span,
     pub cast: Option<CastStrategy>,
@@ -285,8 +278,7 @@ impl Spannable for Indirect {
     }
 }
 
-#[derive(new)]
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(new, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Zeropage {
     span: Span,
     pub cast: CastStrategy,
@@ -336,8 +328,7 @@ impl Spannable for Expression {
     }
 }
 
-#[derive(new)]
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(new, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Surrounded {
     span: Span,
     pub expr: Box<Expression>,
@@ -349,8 +340,7 @@ impl Spannable for Surrounded {
     }
 }
 
-#[derive(new)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(new, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Integer {
     span: Span,
     pub value: u16,
@@ -380,8 +370,7 @@ impl Spannable for Symbol {
     }
 }
 
-#[derive(new)]
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(new, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct GlobalSymbol {
     span: Span,
     pub name: String,
@@ -393,8 +382,7 @@ impl Spannable for GlobalSymbol {
     }
 }
 
-#[derive(new)]
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(new, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct LocalSymbol {
     span: Span,
     pub name: String,
@@ -406,8 +394,7 @@ impl Spannable for LocalSymbol {
     }
 }
 
-#[derive(new)]
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(new, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct StringExpr {
     span: Span,
     pub value: String,
@@ -419,8 +406,7 @@ impl Spannable for StringExpr {
     }
 }
 
-#[derive(new)]
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(new, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct InfixExpr {
     pub lhs: Box<Expression>,
     pub rhs: Box<Expression>,

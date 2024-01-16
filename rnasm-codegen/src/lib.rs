@@ -43,17 +43,17 @@
 //! ```
 
 use derive_new::new;
-use thiserror::Error;
-use std::{rc::Rc, collections::HashMap, fs::File, io::Read};
-use rnasm_ast::{
-    Statement, Instruction, Label, PseudoInstruction, ActualInstruction,
-    GlobalLabel, LocalLabel, Expression, InfixOp, CastStrategy
-};
-use rnasm_opcode::{Mnemonic, Opcode, OpcodeByteLen, AddrMode};
-use rnasm_span::{Span, Spannable};
-use object::{StringObj, IntegerObj, Object};
+use object::{IntegerObj, Object, StringObj};
 use opcode::{operand_to_addrmode, operand_to_cast, operand_to_expr};
+use rnasm_ast::{
+    ActualInstruction, CastStrategy, Expression, GlobalLabel, InfixOp, Instruction, Label,
+    LocalLabel, PseudoInstruction, Statement,
+};
+use rnasm_opcode::{AddrMode, Mnemonic, Opcode, OpcodeByteLen};
+use rnasm_span::{Span, Spannable};
+use std::{collections::HashMap, fs::File, io::Read, rc::Rc};
 use symtable::SymbolTable;
+use thiserror::Error;
 
 mod object;
 mod opcode;
@@ -68,13 +68,17 @@ pub enum CodeGenError {
     #[error("invalid instruction")]
     InvalidInstruction { span: Span },
     #[error("symbol already exist")]
-    SymbolAlreadyExist{ span: Span },
+    SymbolAlreadyExist { span: Span },
     #[error("no such symbol exist")]
     NoSuchSymbolExist { span: Span },
     #[error("cannot define local label: must be placed under global label")]
     CannotDefineLocalLabel { span: Span },
     #[error("invalid number of arguemnts: expect {expect}, got {got}")]
-    InvalidNumberOfArguments { span: Span, expect: &'static str, got: usize },
+    InvalidNumberOfArguments {
+        span: Span,
+        expect: &'static str,
+        got: usize,
+    },
     #[error("invalid type of arguemnt: expect {expect}")]
     InvalidTypeOfArgument { span: Span, expect: &'static str },
     #[error("invalid value of arguemnt: expect {expect}")]
@@ -135,8 +139,7 @@ impl Spannable for CodeGenError {
 }
 
 /// A generated code.
-#[derive(new)]
-#[derive(Default, Debug, Clone, PartialEq, Eq)]
+#[derive(new, Default, Debug, Clone, PartialEq, Eq)]
 pub struct Code {
     #[new(default)]
     pub prgs: HashMap<u16, BankData>, // Bank to program
@@ -159,8 +162,7 @@ pub enum Mirror {
     ForuScreen,
 }
 
-#[derive(new)]
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(new, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct BankData {
     pub base: u16, // Lowest address of this bank.
     #[new(default)]
@@ -170,8 +172,7 @@ pub struct BankData {
 /// A set of infomation which is required while generating code.
 /// These infomation is **temporary** used in each pass unlike
 /// symbol table is used though all pass.
-#[derive(new)]
-#[derive(Default, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(new, Default, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct CodeGenInfo {
     is_pass1: bool,
 
@@ -188,8 +189,7 @@ pub struct CodeGenInfo {
 }
 
 /// A struct which generate prg and chr codes from given statements.
-#[derive(new)]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(new, Debug, Clone, PartialEq, Eq)]
 pub struct CodeGen {
     #[new(default)]
     info: CodeGenInfo,
@@ -218,12 +218,8 @@ impl CodeGen {
 impl CodeGen {
     fn statement(&mut self, stmt: &Statement) -> Result<(), CodeGenError> {
         match stmt {
-            Statement::InstStatement(stmt) => {
-                self.instruction(&stmt.inst)
-            }
-            Statement::LabelStatement(stmt) => {
-                self.label(&stmt.label)
-            }
+            Statement::InstStatement(stmt) => self.instruction(&stmt.inst),
+            Statement::LabelStatement(stmt) => self.label(&stmt.label),
             Statement::LabelInstStatement(stmt) => {
                 self.label(&stmt.label)?;
                 self.instruction(&stmt.inst)
@@ -260,21 +256,22 @@ impl CodeGen {
             "incbin" => self.incbin(pseudo),
             "equ" => self.equ(pseudo),
             _ => Err(CodeGenError::InvalidPseudoName {
-                span: pseudo.name.span()
-            })
+                span: pseudo.name.span(),
+            }),
         }
     }
 
     fn actual(&mut self, actual: &ActualInstruction) -> Result<(), CodeGenError> {
         let Ok(mnemonic) = Mnemonic::try_from(actual.name.name.as_str()) else {
             return Err(CodeGenError::InvalidActualName {
-                span: actual.name.span()
+                span: actual.name.span(),
             });
         };
-        let addrmode = operand_to_addrmode(mnemonic, actual.operand.as_ref())
-            .ok_or(CodeGenError::RelativeCantIndexing {
-                span: actual.span()
-            })?;
+        let addrmode = operand_to_addrmode(mnemonic, actual.operand.as_ref()).ok_or(
+            CodeGenError::RelativeCantIndexing {
+                span: actual.span(),
+            },
+        )?;
         let opcode = Opcode::new(mnemonic, addrmode);
 
         if !self.info.is_pass1 {
@@ -283,25 +280,27 @@ impl CodeGen {
                     // If the statement is like jmp [<expr] or jmp [>expr],
                     // this is invalid.
                     return Err(CodeGenError::IndirectCantUseCast {
-                        span: actual.span()
-                    })
+                        span: actual.span(),
+                    });
                 }
                 Some(cast) => cast,
                 None => CastStrategy::Lsb,
             };
             let value = match operand_to_expr(actual.operand.as_ref()) {
-                Some(expr) =>  match *self.eval(expr)? {
+                Some(expr) => match *self.eval(expr)? {
                     Object::IntegerObj(int) => int.value,
-                    _ => return Err(CodeGenError::InvalidTypeOfArgument {
-                        span: expr.span(),
-                        expect: "integer"
-                    })
-                }
+                    _ => {
+                        return Err(CodeGenError::InvalidTypeOfArgument {
+                            span: expr.span(),
+                            expect: "integer",
+                        })
+                    }
+                },
                 None => 0,
             };
             let Ok(byte) = opcode.try_into() else {
                 return Err(CodeGenError::InvalidInstruction {
-                    span: actual.span()
+                    span: actual.span(),
                 });
             };
 
@@ -312,18 +311,14 @@ impl CodeGen {
                         let diff = (value - self.info.address - 2) as u8;
                         self.write(vec![byte, diff], span)?;
                     } else {
-                        return Err(CodeGenError::RelativeExceedRange {
-                            span
-                        });
+                        return Err(CodeGenError::RelativeExceedRange { span });
                     }
                 } else {
                     if self.info.address + 2 - value <= 128 {
                         let diff = (self.info.address + 2 - value) as u8;
                         self.write(vec![byte, (!diff).wrapping_add(1)], span)?;
                     } else {
-                        return Err(CodeGenError::RelativeExceedRange {
-                            span
-                        });
+                        return Err(CodeGenError::RelativeExceedRange { span });
                     }
                 }
             } else {
@@ -336,7 +331,7 @@ impl CodeGen {
                         CastStrategy::Msb => {
                             self.write(vec![byte, value.to_le_bytes()[1]], span)?;
                         }
-                    }
+                    },
                     OpcodeByteLen::Three => {
                         let value = value.to_le_bytes();
                         self.write(vec![byte, value[0], value[1]], span)?;
@@ -354,11 +349,9 @@ impl CodeGen {
         if self.info.is_pass1 {
             if self.symtable.add(
                 label.name.clone(),
-                Rc::new(IntegerObj::new(self.info.address).into())
+                Rc::new(IntegerObj::new(self.info.address).into()),
             ) {
-                return Err(CodeGenError::SymbolAlreadyExist {
-                    span: label.span()
-                })
+                return Err(CodeGenError::SymbolAlreadyExist { span: label.span() });
             }
         }
         self.info.curr_label = Some(label.name.clone());
@@ -368,22 +361,16 @@ impl CodeGen {
     fn local_label(&mut self, label: &LocalLabel) -> Result<(), CodeGenError> {
         if self.info.is_pass1 {
             let Some(ref global) = self.info.curr_label else {
-                return Err(CodeGenError::CannotDefineLocalLabel {
-                    span: label.span()
-                });
+                return Err(CodeGenError::CannotDefineLocalLabel { span: label.span() });
             };
             let Some(symbol) = self.symtable.get(global) else {
-                return Err(CodeGenError::CannotDefineLocalLabel {
-                    span: label.span()
-                });
+                return Err(CodeGenError::CannotDefineLocalLabel { span: label.span() });
             };
             if symbol.borrow_mut().add(
                 label.name.clone(),
-                Rc::new(IntegerObj::new(self.info.address).into())
+                Rc::new(IntegerObj::new(self.info.address).into()),
             ) {
-                return Err(CodeGenError::SymbolAlreadyExist {
-                    span: label.span()
-                });
+                return Err(CodeGenError::SymbolAlreadyExist { span: label.span() });
             }
         }
         Ok(())
@@ -397,23 +384,25 @@ impl CodeGen {
             return Err(CodeGenError::InvalidNumberOfArguments {
                 span: pseudo.span(),
                 expect: "1",
-                got: 0
-            })
+                got: 0,
+            });
         };
         if operand.args.len() != 1 {
             return Err(CodeGenError::InvalidNumberOfArguments {
                 span: pseudo.span(),
                 expect: "1",
-                got: operand.args.len()
-            })
+                got: operand.args.len(),
+            });
         }
 
         self.info.address = match *self.eval(&operand.args.first())? {
             Object::IntegerObj(int) => int.value,
-            _ => return Err(CodeGenError::InvalidTypeOfArgument {
-                span: operand.args.first().span(),
-                expect: "integer"
-            })
+            _ => {
+                return Err(CodeGenError::InvalidTypeOfArgument {
+                    span: operand.args.first().span(),
+                    expect: "integer",
+                })
+            }
         };
         Ok(())
     }
@@ -425,10 +414,12 @@ impl CodeGen {
                 if !self.info.is_pass1 {
                     let value = match *self.eval(arg)? {
                         Object::IntegerObj(int) => int.value,
-                        _ => return Err(CodeGenError::InvalidTypeOfArgument {
-                            span: arg.span(),
-                            expect: "integer"
-                        })
+                        _ => {
+                            return Err(CodeGenError::InvalidTypeOfArgument {
+                                span: arg.span(),
+                                expect: "integer",
+                            })
+                        }
                     };
                     self.write(vec![value.to_le_bytes()[0]], pseudo.span())?;
                 } else {
@@ -446,10 +437,12 @@ impl CodeGen {
                 if !self.info.is_pass1 {
                     let value = match *self.eval(arg)? {
                         Object::IntegerObj(int) => int.value,
-                        _ => return Err(CodeGenError::InvalidTypeOfArgument {
-                            span: arg.span(),
-                            expect: "integer"
-                        })
+                        _ => {
+                            return Err(CodeGenError::InvalidTypeOfArgument {
+                                span: arg.span(),
+                                expect: "integer",
+                            })
+                        }
                     };
                     self.write(value.to_le_bytes().to_vec(), pseudo.span())?;
                 } else {
@@ -463,30 +456,32 @@ impl CodeGen {
     /// Change current program bank.
     fn pbank(&mut self, pseudo: &PseudoInstruction) -> Result<(), CodeGenError> {
         if self.info.is_pass1 {
-            return Ok(())
+            return Ok(());
         }
 
         let Some(ref operand) = pseudo.operand else {
             return Err(CodeGenError::InvalidNumberOfArguments {
                 span: pseudo.span(),
                 expect: "1",
-                got: 0
-            })
+                got: 0,
+            });
         };
         if operand.args.len() > 2 {
             return Err(CodeGenError::InvalidNumberOfArguments {
                 span: pseudo.span(),
                 expect: "1",
-                got: operand.args.len()
-            })
+                got: operand.args.len(),
+            });
         }
 
         let bank = match *self.eval(&operand.args[0])? {
             Object::IntegerObj(value) => value.value,
-            _ => return Err(CodeGenError::InvalidTypeOfArgument {
-                span: operand.args.first().span(),
-                expect: "integer"
-            })
+            _ => {
+                return Err(CodeGenError::InvalidTypeOfArgument {
+                    span: operand.args.first().span(),
+                    expect: "integer",
+                })
+            }
         };
 
         self.info.curr_prg_bank = bank;
@@ -497,42 +492,46 @@ impl CodeGen {
     /// Define the program bank's base address.
     fn pbankdef(&mut self, pseudo: &PseudoInstruction) -> Result<(), CodeGenError> {
         if self.info.is_pass1 {
-            return Ok(())
+            return Ok(());
         }
 
         let Some(ref operand) = pseudo.operand else {
             return Err(CodeGenError::InvalidNumberOfArguments {
                 span: pseudo.span(),
                 expect: "2",
-                got: 0
-            })
+                got: 0,
+            });
         };
         if operand.args.len() != 2 {
             return Err(CodeGenError::InvalidNumberOfArguments {
                 span: pseudo.span(),
                 expect: "2",
-                got: operand.args.len()
-            })
+                got: operand.args.len(),
+            });
         }
 
         let bank = match *self.eval(&operand.args[0])? {
             Object::IntegerObj(value) => value.value,
-            _ => return Err(CodeGenError::InvalidTypeOfArgument {
-                span: operand.args.first().span(),
-                expect: "integer"
-            })
+            _ => {
+                return Err(CodeGenError::InvalidTypeOfArgument {
+                    span: operand.args.first().span(),
+                    expect: "integer",
+                })
+            }
         };
         let base = match *self.eval(&operand.args[1])? {
             Object::IntegerObj(value) => value.value,
-            _ => return Err(CodeGenError::InvalidTypeOfArgument {
-                span: operand.args.first().span(),
-                expect: "integer"
-            })
+            _ => {
+                return Err(CodeGenError::InvalidTypeOfArgument {
+                    span: operand.args.first().span(),
+                    expect: "integer",
+                })
+            }
         };
 
         if self.code.prgs.insert(bank, BankData::new(base)).is_some() {
             Err(CodeGenError::MultipleCallOfPBankDef {
-                span: pseudo.span()
+                span: pseudo.span(),
             })
         } else {
             Ok(())
@@ -542,30 +541,32 @@ impl CodeGen {
     /// Change current character bank.
     fn cbank(&mut self, pseudo: &PseudoInstruction) -> Result<(), CodeGenError> {
         if self.info.is_pass1 {
-            return Ok(())
+            return Ok(());
         }
 
         let Some(ref operand) = pseudo.operand else {
             return Err(CodeGenError::InvalidNumberOfArguments {
                 span: pseudo.span(),
                 expect: "1",
-                got: 0
-            })
+                got: 0,
+            });
         };
         if operand.args.len() > 2 {
             return Err(CodeGenError::InvalidNumberOfArguments {
                 span: pseudo.span(),
                 expect: "1",
-                got: operand.args.len()
-            })
+                got: operand.args.len(),
+            });
         }
 
         let bank = match *self.eval(&operand.args[0])? {
             Object::IntegerObj(value) => value.value,
-            _ => return Err(CodeGenError::InvalidTypeOfArgument {
-                span: operand.args.first().span(),
-                expect: "integer"
-            })
+            _ => {
+                return Err(CodeGenError::InvalidTypeOfArgument {
+                    span: operand.args.first().span(),
+                    expect: "integer",
+                })
+            }
         };
 
         self.info.curr_chr_bank = bank;
@@ -576,42 +577,46 @@ impl CodeGen {
     /// Define the character bank's base address.
     fn cbankdef(&mut self, pseudo: &PseudoInstruction) -> Result<(), CodeGenError> {
         if self.info.is_pass1 {
-            return Ok(())
+            return Ok(());
         }
 
         let Some(ref operand) = pseudo.operand else {
             return Err(CodeGenError::InvalidNumberOfArguments {
                 span: pseudo.span(),
                 expect: "2",
-                got: 0
-            })
+                got: 0,
+            });
         };
         if operand.args.len() != 2 {
             return Err(CodeGenError::InvalidNumberOfArguments {
                 span: pseudo.span(),
                 expect: "2",
-                got: operand.args.len()
-            })
+                got: operand.args.len(),
+            });
         }
 
         let bank = match *self.eval(&operand.args[0])? {
             Object::IntegerObj(value) => value.value,
-            _ => return Err(CodeGenError::InvalidTypeOfArgument {
-                span: operand.args.first().span(),
-                expect: "integer"
-            })
+            _ => {
+                return Err(CodeGenError::InvalidTypeOfArgument {
+                    span: operand.args.first().span(),
+                    expect: "integer",
+                })
+            }
         };
         let base = match *self.eval(&operand.args[1])? {
             Object::IntegerObj(value) => value.value,
-            _ => return Err(CodeGenError::InvalidTypeOfArgument {
-                span: operand.args.first().span(),
-                expect: "integer"
-            })
+            _ => {
+                return Err(CodeGenError::InvalidTypeOfArgument {
+                    span: operand.args.first().span(),
+                    expect: "integer",
+                })
+            }
         };
 
         if self.code.chrs.insert(bank, BankData::new(base)).is_some() {
             Err(CodeGenError::MultipleCallOfCBankDef {
-                span: pseudo.span()
+                span: pseudo.span(),
             })
         } else {
             Ok(())
@@ -623,23 +628,25 @@ impl CodeGen {
             return Err(CodeGenError::InvalidNumberOfArguments {
                 span: pseudo.span(),
                 expect: "1",
-                got: 0
-            })
+                got: 0,
+            });
         };
         if operand.args.len() != 1 {
             return Err(CodeGenError::InvalidNumberOfArguments {
                 span: pseudo.span(),
                 expect: "1",
-                got: operand.args.len()
-            })
+                got: operand.args.len(),
+            });
         }
 
         let value = match *self.eval(operand.args.first())? {
             Object::IntegerObj(int) => int.value,
-            _ => return Err(CodeGenError::InvalidTypeOfArgument {
-                span: operand.args.first().span(),
-                expect: "integer"
-            })
+            _ => {
+                return Err(CodeGenError::InvalidTypeOfArgument {
+                    span: operand.args.first().span(),
+                    expect: "integer",
+                })
+            }
         };
         self.code.mapper = value;
         Ok(())
@@ -650,23 +657,25 @@ impl CodeGen {
             return Err(CodeGenError::InvalidNumberOfArguments {
                 span: pseudo.span(),
                 expect: "1",
-                got: 0
-            })
+                got: 0,
+            });
         };
         if operand.args.len() != 1 {
             return Err(CodeGenError::InvalidNumberOfArguments {
                 span: pseudo.span(),
                 expect: "1",
-                got: operand.args.len()
-            })
+                got: operand.args.len(),
+            });
         }
 
         let value = match *self.eval(operand.args.first())? {
             Object::IntegerObj(int) => int.value,
-            _ => return Err(CodeGenError::InvalidTypeOfArgument {
-                span: operand.args.first().span(),
-                expect: "integer"
-            })
+            _ => {
+                return Err(CodeGenError::InvalidTypeOfArgument {
+                    span: operand.args.first().span(),
+                    expect: "integer",
+                })
+            }
         };
         self.code.submapper = value as u8;
         Ok(())
@@ -677,32 +686,36 @@ impl CodeGen {
             return Err(CodeGenError::InvalidNumberOfArguments {
                 span: pseudo.span(),
                 expect: "1",
-                got: 0
-            })
+                got: 0,
+            });
         };
         if operand.args.len() != 1 {
             return Err(CodeGenError::InvalidNumberOfArguments {
                 span: pseudo.span(),
                 expect: "1",
-                got: operand.args.len()
-            })
+                got: operand.args.len(),
+            });
         }
 
         let value = match *self.eval(operand.args.first())? {
             Object::IntegerObj(int) => int.value,
-            _ => return Err(CodeGenError::InvalidTypeOfArgument {
-                span: operand.args.first().span(),
-                expect: "integer"
-            })
+            _ => {
+                return Err(CodeGenError::InvalidTypeOfArgument {
+                    span: operand.args.first().span(),
+                    expect: "integer",
+                })
+            }
         };
         self.code.mirror = match value {
             0 => Mirror::HorizontalOrMapperControlled,
             1 => Mirror::Vertical,
             2 => Mirror::ForuScreen,
-            _ => return Err(CodeGenError::InvalidValueOfArgument {
-                span: operand.args.first().span(),
-                expect: "0, 1 or 2"
-            })
+            _ => {
+                return Err(CodeGenError::InvalidValueOfArgument {
+                    span: operand.args.first().span(),
+                    expect: "0, 1 or 2",
+                })
+            }
         };
         Ok(())
     }
@@ -712,43 +725,49 @@ impl CodeGen {
             return Err(CodeGenError::InvalidNumberOfArguments {
                 span: pseudo.span(),
                 expect: "1",
-                got: 0
-            })
+                got: 0,
+            });
         };
         if operand.args.len() != 1 {
             return Err(CodeGenError::InvalidNumberOfArguments {
                 span: pseudo.span(),
                 expect: "1",
-                got: operand.args.len()
-            })
+                got: operand.args.len(),
+            });
         }
 
         let name = match *self.eval(operand.args.first())? {
             Object::StringObj(ref str) => str.value.clone(),
-            _ => return Err(CodeGenError::InvalidTypeOfArgument {
-                span: operand.args.first().span(),
-                expect: "string"
-            })
+            _ => {
+                return Err(CodeGenError::InvalidTypeOfArgument {
+                    span: operand.args.first().span(),
+                    expect: "string",
+                })
+            }
         };
         let mut file = match File::open(name) {
             Ok(file) => file,
-            Err(e) => return Err(CodeGenError::FailedToOpneFile {
-                span: operand.args.first().span(),
-                reason: e
-            })
+            Err(e) => {
+                return Err(CodeGenError::FailedToOpneFile {
+                    span: operand.args.first().span(),
+                    reason: e,
+                })
+            }
         };
         let mut bytes = Vec::new();
         match file.read_to_end(&mut bytes) {
             Ok(_) => (),
-            Err(e) => return Err(CodeGenError::FailedToReadFile {
-                span: operand.args.first().span(),
-                reason: e
-            })
+            Err(e) => {
+                return Err(CodeGenError::FailedToReadFile {
+                    span: operand.args.first().span(),
+                    reason: e,
+                })
+            }
         }
         let len = if bytes.len() > 0xFFFF {
             return Err(CodeGenError::FileTooBig {
-                span: operand.args.first().span()
-            })
+                span: operand.args.first().span(),
+            });
         } else {
             bytes.len() as u16
         };
@@ -765,38 +784,40 @@ impl CodeGen {
             return Err(CodeGenError::InvalidNumberOfArguments {
                 span: pseudo.span(),
                 expect: "2",
-                got: 0
-            })
+                got: 0,
+            });
         };
         if operand.args.len() != 2 {
             return Err(CodeGenError::InvalidNumberOfArguments {
                 span: pseudo.span(),
                 expect: "2",
-                got: operand.args.len()
-            })
+                got: operand.args.len(),
+            });
         }
 
         if self.info.is_pass1 {
             let name = match operand.args.first() {
                 Expression::Symbol(symbol) => match symbol {
-                    rnasm_ast::Symbol::GlobalSymbol(symbol) => {
-                        symbol.name.clone()
+                    rnasm_ast::Symbol::GlobalSymbol(symbol) => symbol.name.clone(),
+                    _ => {
+                        return Err(CodeGenError::InvalidTypeOfArgument {
+                            span: operand.args.first().span(),
+                            expect: "global symbol",
+                        })
                     }
-                    _ => return Err(CodeGenError::InvalidTypeOfArgument {
+                },
+                _ => {
+                    return Err(CodeGenError::InvalidTypeOfArgument {
                         span: operand.args.first().span(),
-                        expect: "global symbol"
+                        expect: "global symbol",
                     })
                 }
-                _ => return Err(CodeGenError::InvalidTypeOfArgument {
-                    span: operand.args.first().span(),
-                    expect: "global symbol"
-                })
             };
             let value = self.eval(&operand.args[1])?;
             if self.symtable.add(name, value) {
                 return Err(CodeGenError::SymbolAlreadyExist {
-                    span: operand.args.first().span()
-                })
+                    span: operand.args.first().span(),
+                });
             };
         }
         Ok(())
@@ -809,29 +830,26 @@ impl CodeGen {
         let data = if self.info.curr_is_prg {
             match self.code.prgs.get_mut(&self.info.curr_prg_bank) {
                 Some(prg) => prg,
-                None => return Err(CodeGenError::NeedBankSwitch {
-                    span
-                }),
+                None => return Err(CodeGenError::NeedBankSwitch { span }),
             }
         } else {
             match self.code.chrs.get_mut(&self.info.curr_chr_bank) {
                 Some(chr) => chr,
-                None => return Err(CodeGenError::NeedBankSwitch {
-                    span
-                }),
+                None => return Err(CodeGenError::NeedBankSwitch { span }),
             }
         };
         let len = if bytes.len() > u16::MAX as usize {
-            return Err(CodeGenError::TargetBytesIsTooLong { span })
+            return Err(CodeGenError::TargetBytesIsTooLong { span });
         } else if self.info.address as usize + bytes.len() > data.base as usize + 0x4000 {
-            return Err(CodeGenError::TargetBytesIsTooLong { span })
+            return Err(CodeGenError::TargetBytesIsTooLong { span });
         } else {
             bytes.len()
         };
         let relative_addr = if self.info.address < data.base {
             return Err(CodeGenError::AddressIsSmall {
-                span, address: self.info.address
-            })
+                span,
+                address: self.info.address,
+            });
         } else {
             self.info.address - data.base
         };
@@ -847,81 +865,67 @@ impl CodeGen {
         use rnasm_ast::Symbol;
         match expr {
             Expression::Surrounded(expr) => self.eval(&expr.expr),
-            Expression::Integer(value) => {
-                Ok(Rc::new(IntegerObj::new(value.value).into()))
-            }
-            Expression::StringExpr(str) => {
-                Ok(Rc::new(StringObj::new(str.value.clone()).into()))
-            }
+            Expression::Integer(value) => Ok(Rc::new(IntegerObj::new(value.value).into())),
+            Expression::StringExpr(str) => Ok(Rc::new(StringObj::new(str.value.clone()).into())),
             Expression::Symbol(symbol) => match symbol {
                 Symbol::GlobalSymbol(global) => {
                     let Some(symbol) = self.symtable.get(&global.name) else {
                         return Err(CodeGenError::NoSuchSymbolExist {
-                            span: global.span()
-                        })
+                            span: global.span(),
+                        });
                     };
                     let value = Rc::clone(&symbol.borrow().value);
                     Ok(value)
                 }
                 Symbol::LocalSymbol(local) => {
                     let Some(ref parent) = self.info.curr_label else {
-                        return Err(CodeGenError::NoSuchSymbolExist {
-                            span: local.span()
-                        })
+                        return Err(CodeGenError::NoSuchSymbolExist { span: local.span() });
                     };
                     let Some(symbol) = self.symtable.get(parent) else {
-                        return Err(CodeGenError::NoSuchSymbolExist {
-                            span: local.span()
-                        })
+                        return Err(CodeGenError::NoSuchSymbolExist { span: local.span() });
                     };
                     let Some(value) = symbol.borrow().get(&local.name) else {
-                        return Err(CodeGenError::NoSuchSymbolExist {
-                            span: local.span()
-                        })
+                        return Err(CodeGenError::NoSuchSymbolExist { span: local.span() });
                     };
                     Ok(value)
                 }
-            }
+            },
             Expression::InfixExpr(infix) => {
                 let lhs = self.eval(&infix.lhs)?;
                 let rhs = self.eval(&infix.rhs)?;
                 match (&*lhs, &*rhs) {
-                    (Object::StringObj(lhs), Object::StringObj(rhs)) => {
-                        match infix.op {
-                            InfixOp::Add => {
-                                let str = format!("{}{}", lhs.value, rhs.value);
-                                Ok(Rc::new(StringObj::new(str).into()))
-                            }
-                            _ => Err(CodeGenError::InvalidInfixOperation {
-                                span: infix.span(),
-                                reason: "only + can be used"
-                            })
+                    (Object::StringObj(lhs), Object::StringObj(rhs)) => match infix.op {
+                        InfixOp::Add => {
+                            let str = format!("{}{}", lhs.value, rhs.value);
+                            Ok(Rc::new(StringObj::new(str).into()))
                         }
-                    }
-                    (Object::IntegerObj(lhs), Object::IntegerObj(rhs)) => {
-                        match infix.op {
-                            InfixOp::Add => {
-                                let value = lhs.value + rhs.value;
-                                Ok(Rc::new(IntegerObj::new(value).into()))
-                            }
-                            InfixOp::Sub => {
-                                let value = lhs.value - rhs.value;
-                                Ok(Rc::new(IntegerObj::new(value).into()))
-                            }
-                            InfixOp::Mul => {
-                                let value = lhs.value * rhs.value;
-                                Ok(Rc::new(IntegerObj::new(value).into()))
-                            }
-                            InfixOp::Div => {
-                                let value = lhs.value / rhs.value;
-                                Ok(Rc::new(IntegerObj::new(value).into()))
-                            }
+                        _ => Err(CodeGenError::InvalidInfixOperation {
+                            span: infix.span(),
+                            reason: "only + can be used",
+                        }),
+                    },
+                    (Object::IntegerObj(lhs), Object::IntegerObj(rhs)) => match infix.op {
+                        InfixOp::Add => {
+                            let value = lhs.value + rhs.value;
+                            Ok(Rc::new(IntegerObj::new(value).into()))
                         }
-                    }
+                        InfixOp::Sub => {
+                            let value = lhs.value - rhs.value;
+                            Ok(Rc::new(IntegerObj::new(value).into()))
+                        }
+                        InfixOp::Mul => {
+                            let value = lhs.value * rhs.value;
+                            Ok(Rc::new(IntegerObj::new(value).into()))
+                        }
+                        InfixOp::Div => {
+                            let value = lhs.value / rhs.value;
+                            Ok(Rc::new(IntegerObj::new(value).into()))
+                        }
+                    },
                     _ => Err(CodeGenError::InvalidInfixOperation {
                         span: infix.span(),
-                        reason: "type of lhs and rhs is different"
-                    })
+                        reason: "type of lhs and rhs is different",
+                    }),
                 }
             }
         }

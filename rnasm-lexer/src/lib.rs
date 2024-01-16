@@ -1,21 +1,21 @@
 //! Provide functional to convert input into list of token.
 
-use thiserror::Error;
-use nonempty::NonEmpty;
 use derive_new::new;
-use std::num::ParseIntError;
-use rnasm_token::{Token, TokenKind};
+use nonempty::NonEmpty;
 use rnasm_span::{Span, Spannable};
+use rnasm_token::{Token, TokenKind};
+use std::num::ParseIntError;
+use thiserror::Error;
 
 /// An error which can be returned when lexing input.
 #[derive(Debug, Error, Clone, PartialEq, Eq)]
 pub enum LexerError {
     #[error("unexpected character found")]
-    UnexpectedCharacter{ span: Span },
+    UnexpectedCharacter { span: Span },
     #[error("failed to parse integer: {reason}")]
-    FailedToParseInteger{ span: Span, reason: ParseIntError },
+    FailedToParseInteger { span: Span, reason: ParseIntError },
     #[error("string must finish with \"")]
-    MissingQuotationMark{ span: Span },
+    MissingQuotationMark { span: Span },
 }
 
 impl Spannable for LexerError {
@@ -32,14 +32,14 @@ impl Spannable for LexerError {
 /// Struct to construct the list of token.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Lexer {
-    input: Vec<(usize, char)>
+    input: Vec<(usize, char)>,
 }
 
 impl Lexer {
     /// Construct `Lexer` from input.
     pub fn new<S: AsRef<str>>(input: S) -> Self {
         Self {
-            input: input.as_ref().char_indices().collect()
+            input: input.as_ref().char_indices().collect(),
         }
     }
 
@@ -53,8 +53,7 @@ impl Lexer {
     }
 }
 
-#[derive(new)]
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(new, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 struct NonEmptyLexer {
     input: NonEmpty<(usize, char)>,
     #[new(value = "0")]
@@ -118,24 +117,24 @@ impl NonEmptyLexer {
 
         let offset = self.offset();
         let kind = match self.next()? {
-            '+'  => TokenKind::Plus,
-            '-'  => TokenKind::Minus,
-            '*'  => TokenKind::Star,
-            '/'  => TokenKind::Slash,
-            '.'  => TokenKind::Period,
-            ','  => TokenKind::Comma,
-            ':'  => TokenKind::Colon,
-            '#'  => TokenKind::Sharp,
-            '<'  => TokenKind::LT,
-            '>'  => TokenKind::GT,
-            '['  => TokenKind::LSquare,
-            ']'  => TokenKind::RSquare,
-            '('  => TokenKind::LParen,
-            ')'  => TokenKind::RParen,
+            '+' => TokenKind::Plus,
+            '-' => TokenKind::Minus,
+            '*' => TokenKind::Star,
+            '/' => TokenKind::Slash,
+            '.' => TokenKind::Period,
+            ',' => TokenKind::Comma,
+            ':' => TokenKind::Colon,
+            '#' => TokenKind::Sharp,
+            '<' => TokenKind::LT,
+            '>' => TokenKind::GT,
+            '[' => TokenKind::LSquare,
+            ']' => TokenKind::RSquare,
+            '(' => TokenKind::LParen,
+            ')' => TokenKind::RParen,
             '\n' => TokenKind::NewLine,
             _ => {
                 let span = Span::new(offset, self.offset() - offset);
-                return Some(Err(LexerError::UnexpectedCharacter { span }))
+                return Some(Err(LexerError::UnexpectedCharacter { span }));
             }
         };
         let span = Span::new(offset, self.offset() - offset);
@@ -188,7 +187,7 @@ impl NonEmptyLexer {
                     self.position = position;
                     return None;
                 }
-            },
+            }
         }
 
         let mut body = String::new();
@@ -207,12 +206,7 @@ impl NonEmptyLexer {
                 let kind = TokenKind::Integer(value);
                 Some(Ok(Token::new(span, kind)))
             }
-            Err(e) => {
-                Some(Err(LexerError::FailedToParseInteger {
-                    span,
-                    reason: e
-                }))
-            }
+            Err(e) => Some(Err(LexerError::FailedToParseInteger { span, reason: e })),
         }
     }
 }
@@ -266,7 +260,7 @@ impl NonEmptyLexer {
                 }
                 Some('\n') => {
                     return Some(Err(LexerError::MissingQuotationMark {
-                        span: Span::new(offset, self.offset() - offset)
+                        span: Span::new(offset, self.offset() - offset),
                     }));
                 }
                 Some(ch) => {
@@ -275,7 +269,7 @@ impl NonEmptyLexer {
                 }
                 None => {
                     return Some(Err(LexerError::MissingQuotationMark {
-                        span: Span::new(offset, self.offset() - offset)
+                        span: Span::new(offset, self.offset() - offset),
                     }));
                 }
             }
@@ -292,9 +286,7 @@ impl NonEmptyLexer {
     fn offset(&self) -> usize {
         match self.input.get(self.position) {
             Some(item) => item.0,
-            None => {
-                self.input.last().0 + self.input.last().1.len_utf8()
-            }
+            None => self.input.last().0 + self.input.last().1.len_utf8(),
         }
     }
 
@@ -317,7 +309,7 @@ impl NonEmptyLexer {
                 self.next();
                 true
             }
-            _ => false
+            _ => false,
         }
     }
 }

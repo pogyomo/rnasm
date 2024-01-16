@@ -1,8 +1,7 @@
 use derive_new::new;
 use rnasm_span::{Span, Spannable};
 
-#[derive(new)]
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(new, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Token {
     span: Span,
     kind: TokenKind,

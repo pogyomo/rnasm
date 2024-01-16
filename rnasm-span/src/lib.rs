@@ -2,7 +2,7 @@
 //!
 //! # `Span` and `Spannable`
 //!
-//! `Span` is a core of this crate. This struct hold the start offset of 
+//! `Span` is a core of this crate. This struct hold the start offset of
 //! source code and the length of the item. You can concat two `Span`
 //! using `+` operator, so you can easily calculate span of the item
 //! which hold several `Spannable` items.
@@ -20,8 +20,7 @@ pub trait Spannable {
 }
 
 /// A struct which hold the range of source code where the item come from.
-#[derive(new)]
-#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(new, Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Span {
     offset: usize,
     len: usize,
@@ -74,12 +73,12 @@ impl Add for Span {
             if self.offset + self.len < rhs.offset + rhs.len {
                 Self {
                     offset: self.offset,
-                    len: rhs.offset - self.offset + rhs.len
+                    len: rhs.offset - self.offset + rhs.len,
                 }
             } else {
                 Self {
                     offset: self.offset,
-                    len: self.len
+                    len: self.len,
                 }
             }
         } else {

@@ -19,21 +19,20 @@
 //! 2. Use `peek_or_err` to get token for searching token which maybe exist.
 //! If the token is expected token, advance position. Otherwise, pop the token.
 
-use thiserror::Error;
-use nonempty::NonEmpty;
 use derive_new::new;
-use std::rc::Rc;
+use nonempty::NonEmpty;
 use rnasm_ast::{
-    Statement, Label, LocalLabel, GlobalLabel, Instruction, LabelInstStatement,
-    LabelStatement, InstStatement, InstName, PseudoInstruction, PseudoOperand,
-    ActualOperand, ActualInstruction, Expression, Accumulator, CastStrategy, 
-    Immediate, Indirect, IndexableRegister, Zeropage, AbsoluteOrRelative,
-    InfixExpr, InfixOp, Integer, Symbol, LocalSymbol, GlobalSymbol, Surrounded,
-    StringExpr
+    AbsoluteOrRelative, Accumulator, ActualInstruction, ActualOperand, CastStrategy, Expression,
+    GlobalLabel, GlobalSymbol, Immediate, IndexableRegister, Indirect, InfixExpr, InfixOp,
+    InstName, InstStatement, Instruction, Integer, Label, LabelInstStatement, LabelStatement,
+    LocalLabel, LocalSymbol, PseudoInstruction, PseudoOperand, Statement, StringExpr, Surrounded,
+    Symbol, Zeropage,
 };
 use rnasm_span::{Span, Spannable};
 use rnasm_token::{Token, TokenKind};
 use stack::TokenStack;
+use std::rc::Rc;
+use thiserror::Error;
 
 mod stack;
 
@@ -57,10 +56,9 @@ impl Spannable for ParserError {
 }
 
 /// A struct to provide functional to parse given token list.
-#[derive(new)]
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(new, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Parser {
-    input: Vec<Token>
+    input: Vec<Token>,
 }
 
 impl Parser {
@@ -69,7 +67,8 @@ impl Parser {
     pub fn parse(self) -> Result<Vec<Statement>, Vec<ParserError>> {
         // Split given token list into list of tokens where each tokens
         // represent statment.
-        let inputs = self.input
+        let inputs = self
+            .input
             // Each statement is separated by newline.
             .split(|t| matches!(t.kind(), TokenKind::NewLine))
             .collect::<Vec<_>>();
@@ -89,7 +88,7 @@ impl Parser {
                     Ok(stmt) => match stmt {
                         Some(stmt) => stmts.push(stmt),
                         _ => (),
-                    }
+                    },
                     Err(err) => errors.push(err),
                 },
                 None => (), // When the statement is empty
@@ -107,8 +106,7 @@ impl Parser {
 
 type ParseResult<T> = Result<T, ParserError>;
 
-#[derive(new)]
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(new, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 struct NonEmptyParser {
     input: NonEmpty<Rc<Token>>,
     #[new(value = "0")]
@@ -128,23 +126,17 @@ impl NonEmptyParser {
             }
             return Err(ParserError::UnexpectedTokenFound {
                 span: stack.span(),
-                expect: "no token"
-            })
+                expect: "no token",
+            });
         }
 
         match (label, instruction) {
             (Some(label), Some(instruction)) => {
                 Ok(Some(LabelInstStatement::new(label, instruction).into()))
             }
-            (Some(label), None) => {
-                Ok(Some(LabelStatement::new(label).into()))
-            }
-            (None, Some(instruction)) => {
-                Ok(Some(InstStatement::new(instruction).into()))
-            }
-            (None, None) => {
-                Ok(None)
-            }
+            (Some(label), None) => Ok(Some(LabelStatement::new(label).into())),
+            (None, Some(instruction)) => Ok(Some(InstStatement::new(instruction).into())),
+            (None, None) => Ok(None),
         }
     }
 
@@ -232,10 +224,12 @@ impl NonEmptyParser {
         stack.push(self.next_or_err("symbol")?);
         let name = match stack.last().kind() {
             TokenKind::Symbol(name) => name.clone(),
-            _ => return Err(ParserError::UnexpectedTokenFound {
-                span: stack.last().span(),
-                expect: "symbol"
-            })
+            _ => {
+                return Err(ParserError::UnexpectedTokenFound {
+                    span: stack.last().span(),
+                    expect: "symbol",
+                })
+            }
         };
 
         if is_pseudo {
@@ -282,10 +276,12 @@ impl NonEmptyParser {
         let mut stack = TokenStack::new(self.next_or_err("a")?);
         match stack.last().kind() {
             TokenKind::RegisterA => (),
-            _ => return Err(ParserError::UnexpectedTokenFound {
-                span: stack.last().span(),
-                expect: "a"
-            })
+            _ => {
+                return Err(ParserError::UnexpectedTokenFound {
+                    span: stack.last().span(),
+                    expect: "a",
+                })
+            }
         }
         Ok(Accumulator::new(stack.span()))
     }
@@ -294,10 +290,12 @@ impl NonEmptyParser {
         let mut stack = TokenStack::new(self.next_or_err("a")?);
         match stack.last().kind() {
             TokenKind::Sharp => (),
-            _ => return Err(ParserError::UnexpectedTokenFound {
-                span: stack.last().span(),
-                expect: "#"
-            })
+            _ => {
+                return Err(ParserError::UnexpectedTokenFound {
+                    span: stack.last().span(),
+                    expect: "#",
+                })
+            }
         }
 
         stack.push(self.peek_or_err("any token")?);
@@ -325,10 +323,12 @@ impl NonEmptyParser {
         let mut stack = TokenStack::new(self.next_or_err("[")?);
         match stack.last().kind() {
             TokenKind::LSquare => (),
-            _ => return Err(ParserError::UnexpectedTokenFound {
-                span: stack.last().span(),
-                expect: "["
-            })
+            _ => {
+                return Err(ParserError::UnexpectedTokenFound {
+                    span: stack.last().span(),
+                    expect: "[",
+                })
+            }
         }
 
         stack.push(self.peek_or_err("any token")?);
@@ -355,13 +355,13 @@ impl NonEmptyParser {
                 self.next();
                 stack.push(self.next_or_err("x")?);
                 match stack.last().kind() {
-                    TokenKind::RegisterX => {
-                        Some(IndexableRegister::X)
+                    TokenKind::RegisterX => Some(IndexableRegister::X),
+                    _ => {
+                        return Err(ParserError::UnexpectedTokenFound {
+                            span: stack.last().span(),
+                            expect: "x",
+                        })
                     }
-                    _ => return Err(ParserError::UnexpectedTokenFound {
-                        span: stack.last().span(),
-                        expect: "x"
-                    })
                 }
             }
             _ => {
@@ -373,15 +373,17 @@ impl NonEmptyParser {
         stack.push(self.next_or_err("]")?);
         match stack.last().kind() {
             TokenKind::RSquare => (),
-            _ => return Err(ParserError::UnexpectedTokenFound {
-                span: stack.last().span(),
-                expect: "]"
-            })
+            _ => {
+                return Err(ParserError::UnexpectedTokenFound {
+                    span: stack.last().span(),
+                    expect: "]",
+                })
+            }
         }
 
         // If no token available, the y register doesn't exist.
         if self.is_eol() {
-            return Ok(Indirect::new(stack.span(), cast, expr, register))
+            return Ok(Indirect::new(stack.span(), cast, expr, register));
         }
 
         // Else, the y register must exist.
@@ -391,24 +393,26 @@ impl NonEmptyParser {
                 if matches!(register, Some(_)) {
                     return Err(ParserError::UnexpectedTokenFound {
                         span: stack.last().span(),
-                        expect: "no register"
-                    })
+                        expect: "no register",
+                    });
                 }
                 stack.push(self.next_or_err("y")?);
                 match stack.last().kind() {
-                    TokenKind::RegisterY => {
-                        Some(IndexableRegister::Y)
+                    TokenKind::RegisterY => Some(IndexableRegister::Y),
+                    _ => {
+                        return Err(ParserError::UnexpectedTokenFound {
+                            span: stack.last().span(),
+                            expect: "y",
+                        })
                     }
-                    _ => return Err(ParserError::UnexpectedTokenFound {
-                        span: stack.last().span(),
-                        expect: "y"
-                    })
                 }
             }
-            _ => return Err(ParserError::UnexpectedTokenFound {
-                span: stack.last().span(),
-                expect: ","
-            })
+            _ => {
+                return Err(ParserError::UnexpectedTokenFound {
+                    span: stack.last().span(),
+                    expect: ",",
+                })
+            }
         };
 
         Ok(Indirect::new(stack.span(), cast, expr, register))
@@ -419,10 +423,12 @@ impl NonEmptyParser {
         let cast = match stack.last().kind() {
             TokenKind::LT => CastStrategy::Lsb,
             TokenKind::GT => CastStrategy::Lsb,
-            _ => return Err(ParserError::UnexpectedTokenFound {
-                span: stack.last().span(),
-                expect: "< or >"
-            })
+            _ => {
+                return Err(ParserError::UnexpectedTokenFound {
+                    span: stack.last().span(),
+                    expect: "< or >",
+                })
+            }
         };
 
         let expr = self.parse_expression()?;
@@ -437,22 +443,22 @@ impl NonEmptyParser {
             TokenKind::Comma => {
                 stack.push(self.next_or_err("x or y")?);
                 match stack.last().kind() {
-                    TokenKind::RegisterX => {
-                        Some(IndexableRegister::X)
+                    TokenKind::RegisterX => Some(IndexableRegister::X),
+                    TokenKind::RegisterY => Some(IndexableRegister::Y),
+                    _ => {
+                        return Err(ParserError::UnexpectedTokenFound {
+                            span: stack.last().span(),
+                            expect: "x or y",
+                        })
                     }
-                    TokenKind::RegisterY => {
-                        Some(IndexableRegister::Y)
-                    }
-                    _ => return Err(ParserError::UnexpectedTokenFound {
-                        span: stack.last().span(),
-                        expect: "x or y"
-                    })
                 }
             }
-            _ => return Err(ParserError::UnexpectedTokenFound {
-                span: stack.last().span(),
-                expect: ","
-            })
+            _ => {
+                return Err(ParserError::UnexpectedTokenFound {
+                    span: stack.last().span(),
+                    expect: ",",
+                })
+            }
         };
 
         Ok(Zeropage::new(stack.span(), cast, expr, register))
@@ -471,22 +477,22 @@ impl NonEmptyParser {
             TokenKind::Comma => {
                 stack.push(self.next_or_err("x or y")?);
                 match stack.last().kind() {
-                    TokenKind::RegisterX => {
-                        Some(IndexableRegister::X)
+                    TokenKind::RegisterX => Some(IndexableRegister::X),
+                    TokenKind::RegisterY => Some(IndexableRegister::Y),
+                    _ => {
+                        return Err(ParserError::UnexpectedTokenFound {
+                            span: stack.last().span(),
+                            expect: "x or y",
+                        })
                     }
-                    TokenKind::RegisterY => {
-                        Some(IndexableRegister::Y)
-                    }
-                    _ => return Err(ParserError::UnexpectedTokenFound {
-                        span: stack.last().span(),
-                        expect: "x or y"
-                    })
                 }
             }
-            _ => return Err(ParserError::UnexpectedTokenFound {
-                span: stack.last().span(),
-                expect: ","
-            })
+            _ => {
+                return Err(ParserError::UnexpectedTokenFound {
+                    span: stack.last().span(),
+                    expect: ",",
+                })
+            }
         };
 
         let span = expr.span() + stack.span();
@@ -508,7 +514,7 @@ impl NonEmptyParser {
                     lhs = InfixExpr::new(
                         Box::new(lhs),
                         Box::new(self.parse_multiplicative_expression()?),
-                        InfixOp::Add
+                        InfixOp::Add,
                     )
                     .into();
                 }
@@ -517,7 +523,7 @@ impl NonEmptyParser {
                     lhs = InfixExpr::new(
                         Box::new(lhs),
                         Box::new(self.parse_multiplicative_expression()?),
-                        InfixOp::Sub
+                        InfixOp::Sub,
                     )
                     .into();
                 }
@@ -536,7 +542,7 @@ impl NonEmptyParser {
                     lhs = InfixExpr::new(
                         Box::new(lhs),
                         Box::new(self.parse_primitive_expression()?),
-                        InfixOp::Mul
+                        InfixOp::Mul,
                     )
                     .into();
                 }
@@ -545,7 +551,7 @@ impl NonEmptyParser {
                     lhs = InfixExpr::new(
                         Box::new(lhs),
                         Box::new(self.parse_primitive_expression()?),
-                        InfixOp::Div
+                        InfixOp::Div,
                     )
                     .into();
                 }
@@ -559,16 +565,12 @@ impl NonEmptyParser {
         let expect = "., (, integer or symbol";
         let mut stack = TokenStack::new(self.next_or_err(expect)?);
         match stack.last().kind() {
-            TokenKind::Integer(value) => {
-                Ok(Integer::new(stack.span(), *value).into())
-            }
+            TokenKind::Integer(value) => Ok(Integer::new(stack.span(), *value).into()),
             TokenKind::Symbol(name) => {
                 let symbol = GlobalSymbol::new(stack.span(), name.clone());
                 Ok(Symbol::GlobalSymbol(symbol).into())
             }
-            TokenKind::String(value) => {
-                Ok(StringExpr::new(stack.span(), value.clone()).into())
-            }
+            TokenKind::String(value) => Ok(StringExpr::new(stack.span(), value.clone()).into()),
             TokenKind::Period => {
                 stack.push(self.next_or_err("symbol")?);
                 match stack.last().kind() {
@@ -576,29 +578,33 @@ impl NonEmptyParser {
                         let symbol = LocalSymbol::new(stack.span(), name.clone());
                         Ok(Symbol::LocalSymbol(symbol).into())
                     }
-                    _ => return Err(ParserError::UnexpectedTokenFound {
-                        span: stack.last().span(),
-                        expect: "symbol"
-                    })
+                    _ => {
+                        return Err(ParserError::UnexpectedTokenFound {
+                            span: stack.last().span(),
+                            expect: "symbol",
+                        })
+                    }
                 }
             }
             TokenKind::LParen => {
                 let expr = self.parse_expression()?;
                 stack.push(self.next_or_err(")")?);
                 match stack.last().kind() {
-                    TokenKind::RParen => {
-                        Ok(Surrounded::new(stack.span(), Box::new(expr)).into())
+                    TokenKind::RParen => Ok(Surrounded::new(stack.span(), Box::new(expr)).into()),
+                    _ => {
+                        return Err(ParserError::UnexpectedTokenFound {
+                            span: stack.last().span(),
+                            expect: ")",
+                        })
                     }
-                    _ => return Err(ParserError::UnexpectedTokenFound {
-                        span: stack.last().span(),
-                        expect: ")"
-                    })
                 }
             }
-            _ => return Err(ParserError::UnexpectedTokenFound {
-                span: stack.last().span(),
-                expect
-            })
+            _ => {
+                return Err(ParserError::UnexpectedTokenFound {
+                    span: stack.last().span(),
+                    expect,
+                })
+            }
         }
     }
 }

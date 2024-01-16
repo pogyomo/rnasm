@@ -1,42 +1,44 @@
 //! Module to provide function to convert ast into opcode
 
-use rnasm_ast::{ActualOperand, IndexableRegister, CastStrategy, Expression};
-use rnasm_opcode::{Mnemonic, AddrMode};
+use rnasm_ast::{ActualOperand, CastStrategy, Expression, IndexableRegister};
+use rnasm_opcode::{AddrMode, Mnemonic};
 
 /// Get actual addressing mode of given mnemonic.
 /// This return None if mnemonic is relative, but indexing.
 pub fn operand_to_addrmode(
     mnemonic: Mnemonic,
-    operand: Option<&ActualOperand>
+    operand: Option<&ActualOperand>,
 ) -> Option<AddrMode> {
     if let Some(ref operand) = operand {
         use ActualOperand::*;
         match operand {
             Accumulator(_) => Some(AddrMode::Accumulator),
-            AbsoluteOrRelative(aor) => if mnemonic.is_relative() {
-                if matches!(aor.register, None) {
-                    Some(AddrMode::Relative)
+            AbsoluteOrRelative(aor) => {
+                if mnemonic.is_relative() {
+                    if matches!(aor.register, None) {
+                        Some(AddrMode::Relative)
+                    } else {
+                        None
+                    }
                 } else {
-                    None
-                }
-            } else {
-                match aor.register {
-                    Some(IndexableRegister::X) => Some(AddrMode::AbsoluteX),
-                    Some(IndexableRegister::Y) => Some(AddrMode::AbsoluteY),
-                    None => Some(AddrMode::Absolute)
+                    match aor.register {
+                        Some(IndexableRegister::X) => Some(AddrMode::AbsoluteX),
+                        Some(IndexableRegister::Y) => Some(AddrMode::AbsoluteY),
+                        None => Some(AddrMode::Absolute),
+                    }
                 }
             }
             Immediate(_) => Some(AddrMode::Immediate),
             Indirect(ind) => match ind.register {
                 Some(IndexableRegister::X) => Some(AddrMode::IndirectX),
                 Some(IndexableRegister::Y) => Some(AddrMode::IndirectY),
-                None => Some(AddrMode::Indirect)
-            }
+                None => Some(AddrMode::Indirect),
+            },
             Zeropage(zpg) => match zpg.register {
                 Some(IndexableRegister::X) => Some(AddrMode::ZeropageX),
                 Some(IndexableRegister::Y) => Some(AddrMode::ZeropageY),
-                None => Some(AddrMode::Zeropage)
-            }
+                None => Some(AddrMode::Zeropage),
+            },
         }
     } else {
         Some(AddrMode::Implied)

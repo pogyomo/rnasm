@@ -18,14 +18,12 @@ pub enum Object {
     StringObj(StringObj),
 }
 
-#[derive(new)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(new, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct IntegerObj {
     pub value: u16,
 }
 
-#[derive(new)]
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(new, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct StringObj {
     pub value: String,
 }
